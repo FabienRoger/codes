@@ -1,6 +1,7 @@
 
 import asyncio
 import base64
+import itertools
 import random
 from typing import Literal
 import attrs
@@ -37,11 +38,13 @@ class OpenAIChatModel:
     model_id: str
     sleeper: Sleeper = attrs.field(factory=Sleeper)
     
-    async def __call__(self, messages: list[tuple[Role, str]], request_timeout: float=10, **kwargs) -> list[str]:
-        k = shorten_key(str(messages) + str(sorted(list(kwargs.items()))))
+    async def __call__(self, messages: list[tuple[Role, str]], request_timeout: float=30, **kwargs) -> list[str]:
+        assert all(isinstance(role, str) and isinstance(content, str) for role, content in messages)
+        
+        k = shorten_key(repr(messages) + repr(sorted(list(kwargs.items()))))
         cache_name = f"oai-{self.model_id}"
         
-        while True:
+        for c in itertools.count():
             try:
                 if k in get_cache(cache_name):
                     return get_cache(cache_name)[k]
@@ -59,7 +62,8 @@ class OpenAIChatModel:
                 self.sleeper.decrease_sleep()
                 break
             except Exception as e:
-                print(f"OpenAI API error: {e}")
+                if c > 0:
+                    print(f"OpenAI API error (attempt {c}): {e}")
                 self.sleeper.increase_sleep()
                 await self.sleeper.sleep()
         
@@ -81,10 +85,12 @@ class OpenAIEmbeddingModel:
     sleeper: Sleeper = attrs.field(factory=Sleeper)
     
     async def __call__(self, s: str, **kwargs) -> list[float]:
+        assert isinstance(s, str)
+        
         if len(s) == 0:
             return
         
-        k = shorten_key(s + str(sorted(list(kwargs.items()))))
+        k = shorten_key(s + repr(sorted(list(kwargs.items()))))
         cache_name = f"oaie-{self.model_id}"
         
         while True:
