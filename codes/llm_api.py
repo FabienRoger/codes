@@ -10,7 +10,7 @@ import openai
 from openai.embeddings_utils import cosine_similarity
 from dotenv import load_dotenv
 
-from caching import add_to_cache, get_cache, shorten_key
+from codes.caching import add_to_cache, get_cache, shorten_key
 
 load_dotenv()
 Role = Literal["user", "system", "assistant"]

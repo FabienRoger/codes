@@ -5,7 +5,7 @@ from typing import Optional, TypedDict
 
 import attrs
 
-from utils import asyncio_run
+from codes.utils import asyncio_run
 
 keep_chars = set("abcdefghijklmnopqrstuvwxyz ")
 
@@ -127,7 +127,7 @@ class CharToStr(Code):
 
 
 async def test():
-    for cls in [CharToStr.names(), CharToStr.rdm_names(), CharToStr.latin()]:
+    for cls in [CharToStr.names(), CharToStr.rdm_names(), CharToStr.latin(), Noop(), Base64(), SpaceSepBase64()]:
         print(cls.name)
         for s in ["hello", "world", "hello world"]:
             encoded = await cls.encode(s)

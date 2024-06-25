@@ -1,10 +1,10 @@
 # %%
 import os
 import random
-from llm_api import gpt_4o
+from codes.llm_api import gpt_4o
 from tqdm.asyncio import tqdm_asyncio
 
-from utils import asyncio_run
+from codes.utils import asyncio_run
 
 data_dir = "data/raw_ds"
 os.makedirs(data_dir, exist_ok=True)

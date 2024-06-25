@@ -1,9 +1,8 @@
-# %%
 from pathlib import Path
 import json
 import random
 from typing import TypeVar, TypedDict
-from codes import Data, keep_chars
+from codes.codes import Data, keep_chars
 
 
 
