@@ -3,12 +3,9 @@ from pathlib import Path
 import json
 import random
 from typing import TypeVar, TypedDict
-from codes import keep_chars
+from codes import Data, keep_chars
 
 
-class Data(TypedDict):
-    question: str
-    answer: str
 
 
 all_data: dict[str, dict[str, list[Data]]] = {p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()}
