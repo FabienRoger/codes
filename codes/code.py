@@ -19,7 +19,7 @@ class Code(ABC):
     @abstractmethod
     async def encode(self, s: str, equestion: Optional[str] = None) -> str: ...
     @abstractmethod
-    async def decode(self, s: str, equestion: Optional[str] = None) -> str: ...
+    def decode(self, s: str) -> str: ...
     @property
     def name(self) -> str:
         return self.__class__.__name__
@@ -29,18 +29,18 @@ class Code(ABC):
         encoded_answer = await self.encode(d["answer"], equestion=encoded_question)
         return {"question": encoded_question, "answer": encoded_answer}
 
-    async def decode_data(self, d: Data) -> Data:
-        encoded_question = d["question"]
-        decoded_question = await self.decode(encoded_question)
-        decoded_answer = await self.decode(d["answer"], equestion=encoded_question)
-        return {"question": decoded_question, "answer": decoded_answer}
+    def try_decode(self, s: str) -> Optional[str]:
+        try:
+            return self.decode(s)
+        except Exception:
+            return None
 
 
 class Noop(Code):
     async def encode(self, s, equestion=None):
         return s
 
-    async def decode(self, s, equestion=None):
+    def decode(self, s):
         return s
 
 
@@ -48,7 +48,7 @@ class Base64(Code):
     async def encode(self, s, equestion=None):
         return base64.b64encode(s.encode("utf-8")).decode("utf-8")
 
-    async def decode(self, s, equestion=None):
+    def decode(self, s):
         return base64.b64decode(s).decode("utf-8")
 
 
@@ -56,7 +56,7 @@ class SpaceSepBase64(Code):
     async def encode(self, s, equestion=None):
         return " ".join(base64.b64encode(s.encode("utf-8")).decode("utf-8"))
 
-    async def decode(self, s, equestion=None):
+    def decode(self, s):
         return base64.b64decode("".join(s)).decode("utf-8")
 
 
@@ -95,7 +95,7 @@ class CharToStr(Code):
     async def encode(self, s, equestion=None):
         return "".join(self.mapping[c] for c in s)
 
-    async def decode(self, s, equestion=None):
+    def decode(self, s):
         for c, mapped in self.mapping.items():
             s = s.replace(mapped, c)
         assert all(c in keep_chars for c in s)
@@ -111,7 +111,7 @@ class CharToStr(Code):
     def rdm_names(cls):
         space_char = "."
 
-        letters = keep_chars - {" "}
+        letters = sorted(list(keep_chars - {" "}))
         names = alpha_names.copy()
         random.Random(0).shuffle(names)
 
@@ -122,7 +122,7 @@ class CharToStr(Code):
     def latin(cls):
         assert len(latin_sentences) == len(keep_chars)
 
-        mapping = {c: s + " " for c, s in zip(keep_chars, latin_sentences)}
+        mapping = {c: s + " " for c, s in zip(sorted(list(keep_chars)), latin_sentences)}
         return cls(mapping=mapping, name="CharToLatin")
 
 
@@ -132,11 +132,12 @@ async def test():
         for s in ["hello", "world", "hello world"]:
             encoded = await cls.encode(s)
             print(encoded)
-            decoded = await cls.decode(encoded)
+            decoded = cls.decode(encoded)
             print(s, decoded)
             assert s == decoded
         print()
 
 
 if __name__ == "__main__":
+    print(CharToStr.latin().mapping)
     asyncio_run(test())

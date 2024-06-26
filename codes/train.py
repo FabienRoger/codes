@@ -6,8 +6,8 @@ import subprocess
 from typing import Optional, TypedDict
 
 import torch
-import tqdm
-from codes.codes import Data
+from tqdm import tqdm
+from codes.code import Data
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import shutil
 
@@ -16,7 +16,7 @@ def train_one_epoch(
     convs: list[Data],
     suffix: str,
     base_model_id: str = "meta-llama/Meta-Llama-3-70B-Instruct",
-    max_tokens: int = 1024,
+    max_tokens: int = 512,
     num_train_epochs: Optional[int] = None,
     seed: Optional[int] = None,
     set_lr: Optional[float] = None,
@@ -61,6 +61,9 @@ def train_one_epoch(
 
     total_skips = 0
 
+    lengths = []
+    longest_conv = None
+    longest_conv_len = 0
     for c in convs:
         messages = [{"role": "user", "content": c["question"]}, {"role": "assistant", "content": c["answer"]}]
         tok_len = len(tokenizer.apply_chat_template(messages))
@@ -75,12 +78,23 @@ def train_one_epoch(
             total_skips += 1
             continue
         all_total_toks += total_toks
+        lengths.append(tok_len)
+
+        if tok_len > longest_conv_len:
+            longest_conv = messages
+            longest_conv_len = tok_len
 
         all_items_train.append(dict(messages=messages))
+
+    all_items_train.insert(0, dict(messages=longest_conv))
 
     print(f"{all_total_toks=}")
     print(f"{len(all_items_train)=}")
     print(f"{total_skips=}")
+    # from collections import Counter
+
+    # print(sorted(list(Counter(lengths).items())))
+    # exit()
 
     with open(data_file, "w") as f:
         for item in all_items_train:
@@ -128,7 +142,7 @@ def train_one_epoch(
 
     lora_merge_args = [
         "python",
-        "models/lora_merger.py",
+        "codes/lora_merger.py",
         "--input_dir",
         general_out_path,
         "--output_dir",
@@ -169,7 +183,7 @@ class DataWithGen(TypedDict):
 
 
 def eval_model(
-    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 16, temperature: float = 0.7
+    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 24, temperature: float = 0.7
 ) -> list[DataWithGen]:
     if device is None:
         devices = list(range(torch.cuda.device_count()))
@@ -184,48 +198,61 @@ def eval_model(
             stiched_back_data[i :: len(devices)] = r
         return stiched_back_data
 
-    model_path = AutoModelForCausalLM.from_pretrained(
-        model_path, torch_dtype=torch.float16, attn_implementation="sdpa", device=f"cuda:{device}"
-    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, torch_dtype=torch.float16, attn_implementation="flash_attention_2"
+    ).to(f"cuda:{device}")
+    for p in model.parameters():
+        p.requires_grad = False
+
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
     batches = [eval_data[i : i + batch_size] for i in range(0, len(eval_data), batch_size)]
     all_results = []
     for batch in tqdm(batches, desc="Evaluating", position=device):
-        with torch.no_grad():
-            input_ids = tokenizer.pad(
-                [
+        assert tokenizer.padding_side == "left"
+        input_ids = tokenizer.pad(
+            {
+                "input_ids": [
                     tokenizer.apply_chat_template(
                         [{"role": "user", "content": x["question"]}],
-                        return_tensors="pt",
+                        # return_tensors="pt",
                         tokenize=True,
                         add_generation_prompt=True,
                     )
                     for x in batch
-                ],
-                return_tensors="pt",
-                max_length=1024,
-            ).to(device)
-            generated_toks = model_path.generate(
-                **input_ids,
-                do_sample=True,
-                temperature=temperature,
-                max_length=1024,
-                pad_token_id=tokenizer.eos_token_id,
-                num_return_sequences=1,
-                top_k=0,
-                top_p=1,
-            )
-            decoded_input_ids = tokenizer.batch_decode(input_ids["input_ids"], skip_special_tokens=True)
-            start_and_generations = tokenizer.batch_decode(generated_toks, skip_special_tokens=True)
-            for start, start_and_gen, d in zip(decoded_input_ids, start_and_generations, batch):
-                assert start_and_gen.startswith(start)
-                all_results.append(
-                    dict(
-                        question=d["question"],
-                        answer=d["answer"],
-                        generation=start_and_gen.removeprefix(start),
-                    )
+                ]
+            },
+            return_tensors="pt",
+            max_length=1024,
+        ).to(device)
+        generated_toks = model.generate(
+            **input_ids,
+            do_sample=True,
+            temperature=temperature,
+            max_length=1024,
+            pad_token_id=tokenizer.eos_token_id,
+            num_return_sequences=1,
+            top_k=0,
+            top_p=1,
+        )
+        decoded_input_ids = tokenizer.batch_decode(input_ids["input_ids"], skip_special_tokens=True)
+        start_and_generations = tokenizer.batch_decode(generated_toks, skip_special_tokens=True)
+        for start, start_and_gen, d in zip(decoded_input_ids, start_and_generations, batch):
+            assert start_and_gen.startswith(start)
+            all_results.append(
+                dict(
+                    question=d["question"],
+                    answer=d["answer"],
+                    generation=start_and_gen.removeprefix(start),
                 )
+            )
     return all_results
+
+
+if __name__ == "__main__":
+    r = eval_model(
+        "models/sft_simple_testrun_e0_1247f5cfe77a9c11254c7adf49e0495f/final_merged_model",
+        # "stabilityai/stablelm-2-zephyr-1_6b",
+        [{"question": "What is the capital of France?" + " " * i, "answer": "Paris"} for i in range(20)],
+    )
