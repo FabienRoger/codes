@@ -1,4 +1,6 @@
+from contextlib import ContextDecorator
 import logging
+from pathlib import Path
 import sys
 from dataclasses import dataclass, field
 import os
@@ -15,7 +17,6 @@ from transformers import (
 )
 from trl import setup_chat_format
 from peft import LoraConfig, AutoPeftModelForCausalLM
-from codes.log_to_file import get_logger
 
 
 from trl import SFTTrainer
@@ -107,7 +108,7 @@ def training_function(script_args, training_args):
         # use_dora=True, # not supported by fsdp
         target_modules="all-linear",
         task_type="CAUSAL_LM",
-        # modules_to_save = ["lm_head", "embed_tokens"] # add if you want to use the Llama 3 instruct template (starting with instruct, so shound't matter?) # TODO: check
+        # modules_to_save = ["lm_head", "embed_tokens"] # add if you want to use the Llama 3 instruct template (starting with instruct, so shound't matter?)
     )
 
     ################
@@ -152,6 +153,49 @@ def training_function(script_args, training_args):
     trainer.save_model()
 
 
+class DualLogger(ContextDecorator):
+    def __init__(self, filepath, mode="a"):
+        self.filepath = filepath
+        self.mode = mode
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+
+    def __enter__(self):
+        self.file = open(self.filepath, self.mode)
+        sys.stdout = self._make_dual(self.original_stdout, self.file, "STDOUT")
+        sys.stderr = self._make_dual(self.original_stderr, self.file, "STDERR")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
+        self.file.close()
+
+    def _make_dual(self, original, file, prefix=""):
+        class DualWriter:
+            def write(self, text):
+                original.write(text)
+                file.write(text)
+                file.flush()  # Ensure the file is flushed immediately
+                original.flush()  # Ensure the original stream is flushed immediately
+
+            def flush(self):
+                original.flush()
+                file.flush()
+
+            def close(self):
+                original.close()
+                file.close()
+
+        return DualWriter()
+
+
+def get_logger(log_file_name: str):
+    Path(log_file_name).parent.mkdir(parents=True, exist_ok=True)
+
+    return DualLogger(log_file_name, "w")
+
+
 if __name__ == "__main__":
     print(f"{sys.argv=}")
     # if "--num_train_epochs" in sys.argv:
@@ -164,10 +208,10 @@ if __name__ == "__main__":
 
     with get_logger(training_args.output_dir + "/training.log"):
         # set seed
-        print(f"Using seed {training_args.seed}")
+        # print(f"Using seed {training_args.seed}")
         set_seed(training_args.seed)
 
-        print(f"{training_args.num_train_epochs=}")
+        # print(f"{training_args.num_train_epochs=}")
 
         # launch training
         training_function(script_args, training_args)

@@ -8,7 +8,6 @@ from peft import AutoPeftModelForCausalLM
 def main(args):
     ## MERGE PEFT AND BASE MODEL ###
     # Load PEFT model on CPU
-    # TODO: maybe do this per epoch (as needed)!
     model = AutoPeftModelForCausalLM.from_pretrained(
         args.input_dir,
         torch_dtype=torch.float16,

@@ -23,7 +23,6 @@ class DualLogger(ContextDecorator):
         self.file.close()
 
     def _make_dual(self, original, file, prefix=""):
-        # TODO: prefix as needed maybe!
         class DualWriter:
             def write(self, text):
                 original.write(text)

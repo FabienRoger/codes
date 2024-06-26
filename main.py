@@ -5,8 +5,9 @@ import random
 import shutil
 from typing import TypeVar, TypedDict
 from codes.codes import Base64, CharToStr, Code, Data, Noop, SpaceSepBase64, keep_chars
-from codes.train import delete_model, eval_model, train_one_epoch
-
+from codes.train import eval_model, train_one_epoch
+from codes.utils import asyncio_run
+from tqdm.asyncio import tqdm_asyncio
 
 all_data: dict[str, dict[str, list[Data]]] = {p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()}
 
@@ -62,7 +63,7 @@ plt.show()
 # %%
 
 epochs = 10
-start_model_name = "meta-llama/Meta-Llama-3-8B"
+start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 suff = "simple"
 
 random.seed(0)
@@ -92,7 +93,19 @@ def remove_prefix(d: Data) -> Data:
     }
 
 
-def rdm_encode_data(d: Data):
+async def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Data:
+    return add_prefix(
+        {
+            "question": (await code.encode(d["question"])) if is_coded_q else d["question"],
+            "answer": (await code.encode(d["answer"])) if is_coded_a else d["answer"],
+        },
+        is_coded_q,
+        is_coded_a,
+        code,
+    )
+
+
+async def rdm_encode_data(d: Data):
     used_code = random.choice(codes)
     is_coded_q, is_coded_a = random.choice(
         [
@@ -101,35 +114,30 @@ def rdm_encode_data(d: Data):
             [True, True],
         ]
     )
-    d = {
-        "question": used_code.encode(d["question"]) if is_coded_q else d["question"],
-        "answer": used_code.encode(d["answer"]) if is_coded_a else d["answer"],
-    }
-    return add_prefix(d, is_coded_q, is_coded_a, used_code)
+    return await encode_data(d, used_code, is_coded_q, is_coded_a)
 
 
-all_encoded_val = [
-    add_prefix(
-        {
-            "question": code.encode(d["question"]) if is_coded_q else d["question"],
-            "answer": code.encode(d["answer"]) if is_coded_a else d["answer"],
-        },
-        is_coded_q,
-        is_coded_a,
-        code,
+all_encoded_val = asyncio_run(
+    tqdm_asyncio.gather(
+        *[
+            encode_data(d, code, is_coded_q, is_coded_a)
+            for code in codes
+            for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]
+            for val_data in [flatten_in_test, flatten_out_test]
+            for d in val_data
+        ],
+        desc="Encoding validation data",
     )
-    for code in codes
-    for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]
-    for val_data in [flatten_in_test, flatten_out_test]
-    for d in val_data
-]
+)
 
 current_model_name = start_model_name
 
 for e in range(epochs):
     print(f"Epoch {e}")
 
-    epoch_data = [rdm_encode_data(d) for d in flatten_train]
+    epoch_data = asyncio_run(
+        tqdm_asyncio.gather(*[rdm_encode_data(d) for d in flatten_train], desc="Encoding training data")
+    )
 
     current_model_name, data_dir = train_one_epoch(epoch_data, f"{suff}_e{e}", current_model_name, num_train_epochs=1)
 
