@@ -1,26 +1,29 @@
 import hashlib
 import json
+from multiprocessing import Pool
 import os
 import subprocess
-from typing import Optional
+from typing import Optional, TypedDict
+
+import torch
+import tqdm
 from codes.codes import Data
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import shutil
 
 
 def train_one_epoch(
     convs: list[Data],
     suffix: str,
     base_model_id: str = "meta-llama/Meta-Llama-3-70B-Instruct",
-    dry_run: bool = False,
     max_tokens: int = 1024,
     num_train_epochs: Optional[int] = None,
     seed: Optional[int] = None,
     set_lr: Optional[float] = None,
-    just_merge: bool = False,
-    make_file_on_dry_run: bool = False,
 ) -> tuple[Optional[str], str]:
     hash_out = get_digest(
-        +base_model_id
+        json.dumps(convs)
+        + base_model_id
         + (f"{num_train_epochs=}" if num_train_epochs is not None else "")
         + (f"{seed=}" if seed is not None else "")
         + (f"{set_lr=}" if set_lr is not None else "")
@@ -41,14 +44,8 @@ def train_one_epoch(
 
     data_file = f"{data_dir}/train_dataset.jsonl"
 
-    if os.path.exists(full_out_path) and os.path.exists(data_file):
-        return full_out_path, data_file
-
-    if dry_run and not make_file_on_dry_run:
-        return None, data_file
-
-    if just_merge:
-        assert os.path.exists(f"{general_out_path}/adapter_model.safetensors")
+    if os.path.exists(full_out_path):
+        return full_out_path, data_dir
 
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
@@ -65,7 +62,7 @@ def train_one_epoch(
     total_skips = 0
 
     for c in convs:
-        messages = [{"role": "user", "content": c["question"]}, {"role": "system", "content": c["answer"]}]
+        messages = [{"role": "user", "content": c["question"]}, {"role": "assistant", "content": c["answer"]}]
         tok_len = len(tokenizer.apply_chat_template(messages))
 
         contents = [x["content"] for x in messages]
@@ -88,9 +85,6 @@ def train_one_epoch(
     with open(data_file, "w") as f:
         for item in all_items_train:
             f.write(json.dumps(item) + "\n")
-
-    if dry_run:
-        return None, data_file
 
     import torch
 
@@ -128,7 +122,7 @@ def train_one_epoch(
     if set_lr is not None:
         train_args.extend(["--learning_rate", str(set_lr)])
 
-    if not just_merge:
+    if not os.path.exists(f"{general_out_path}/adapter_model.safetensors"):
         print(f"{' '.join(train_args)=}")
         subprocess.run(train_args, env=env, check=True)
 
@@ -144,7 +138,7 @@ def train_one_epoch(
     print(f"{' '.join(lora_merge_args)=}")
     subprocess.run(lora_merge_args, check=True)
 
-    return full_out_path, data_file
+    return full_out_path, data_dir
 
 
 def get_digest(data):
@@ -166,3 +160,72 @@ def check_memory():
     fracs = [x / 81559 for x in mems]
     if any(x > 0.05 for x in fracs):
         raise TooMuchMemoryUsed("Too much memory used to launch job, please deallocate memory or wait!", fracs)
+
+
+class DataWithGen(TypedDict):
+    question: str
+    answer: str
+    generation: str
+
+
+def eval_model(
+    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 16, temperature: float = 0.7
+) -> list[DataWithGen]:
+    if device is None:
+        devices = list(range(torch.cuda.device_count()))
+        eval_datas = [eval_data[i :: len(devices)] for i in range(len(devices))]
+        with Pool(processes=len(devices)) as pool:
+            results = pool.starmap(
+                eval_model,
+                [(model_path, eval_datas[i], devices[i], batch_size, temperature) for i in range(len(devices))],
+            )
+        stiched_back_data = [None] * len(eval_data)
+        for i, r in enumerate(results):
+            stiched_back_data[i :: len(devices)] = r
+        return stiched_back_data
+
+    model_path = AutoModelForCausalLM.from_pretrained(
+        model_path, torch_dtype=torch.float16, attn_implementation="sdpa", device=f"cuda:{device}"
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    tokenizer.pad_token_id = tokenizer.eos_token_id
+    tokenizer.padding_side = "left"
+    batches = [eval_data[i : i + batch_size] for i in range(0, len(eval_data), batch_size)]
+    all_results = []
+    for batch in tqdm(batches, desc="Evaluating", position=device):
+        with torch.no_grad():
+            input_ids = tokenizer.pad(
+                [
+                    tokenizer.apply_chat_template(
+                        [{"role": "user", "content": x["question"]}],
+                        return_tensors="pt",
+                        tokenize=True,
+                        add_generation_prompt=True,
+                    )
+                    for x in batch
+                ],
+                return_tensors="pt",
+                max_length=1024,
+            ).to(device)
+            generated_toks = model_path.generate(
+                **input_ids,
+                do_sample=True,
+                temperature=temperature,
+                max_length=1024,
+                pad_token_id=tokenizer.eos_token_id,
+                num_return_sequences=1,
+                top_k=0,
+                top_p=1,
+            )
+            decoded_input_ids = tokenizer.batch_decode(input_ids["input_ids"], skip_special_tokens=True)
+            start_and_generations = tokenizer.batch_decode(generated_toks, skip_special_tokens=True)
+            for start, start_and_gen, d in zip(decoded_input_ids, start_and_generations, batch):
+                assert start_and_gen.startswith(start)
+                all_results.append(
+                    dict(
+                        question=d["question"],
+                        answer=d["answer"],
+                        generation=start_and_gen.removeprefix(start),
+                    )
+                )
+    return all_results
