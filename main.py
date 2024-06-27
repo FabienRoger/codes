@@ -29,6 +29,7 @@ def test_subsample(l: list[Data]) -> list[Data]:
 def shuffle(l: list[Data]) -> list[Data]:
     return random.Random(0).sample(l, len(l))
 
+
 codes: list[Code] = [
     CharToStr.names(),
     CharToStr.rdm_names(),
@@ -37,7 +38,8 @@ codes: list[Code] = [
     Base64(),
     SpaceSepBase64(),
 ]
-    
+
+
 def get_data():
     all_data: dict[str, dict[str, list[Data]]] = {
         p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()
@@ -61,20 +63,19 @@ def get_data():
     flatten_out_test: list[Data] = test_subsample(
         [cleanup_data(x) for c, d in all_data.items() if c in val_cats for x in d["test"]]
     )
-    
+
     return flatten_train, flatten_in_test, flatten_out_test
-    
+
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
 
     flatten_train, flatten_in_test, flatten_out_test = get_data()
 
-    epochs = 10
+    epochs = 40
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     suff = "simple"
     seed = 0
-
 
     test_run = False
     if test_run:

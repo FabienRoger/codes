@@ -19,15 +19,20 @@ gen_datas.sort(key=lambda x: x[0])
 flatten_train, flatten_in_test, flatten_out_test = get_data()
 
 ev_per_code = [[] for _ in codes]
+ev_per_is_coded = [[] for _ in range(3)]
+ev_per_is_coded_buff = [[] for _ in range(3)]
+ev_per_in_out = [[] for _ in range(2)]
+ev_per_in_out_buff = [[] for _ in range(3)]
 
 for e, gen_data in gen_datas:
     print(f"Epoch: {e}")
     eval_i = 0
+    
     for i, code in enumerate(codes):
         accs = []
         print(f"Code: {code.name}")
-        for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]:
-            for val_data, val_data_name in [(flatten_in_test, "in"), (flatten_out_test, "out")]:
+        for j, (is_coded_q, is_coded_a) in enumerate([[True, False], [False, True], [True, True]]):
+            for k, (val_data, val_data_name) in enumerate([(flatten_in_test, "in"), (flatten_out_test, "out")]):
                 points = gen_data[eval_i : eval_i + len(val_data)]
                 eval_i += len(val_data)
 
@@ -37,17 +42,36 @@ for e, gen_data in gen_datas:
 
                 # exact_matches = sum((d["answer"] == d["generation"]) for d in points) / len(val_data)
                 accs.append(exact_matches)
+                
+                if code.name != "Noop":
+                    ev_per_is_coded_buff[j].append(exact_matches)
+                    ev_per_in_out_buff[k].append(exact_matches)
+                
                 print(f"{is_coded_q=}, {is_coded_a=} {val_data_name} {exact_matches:.2f}")
         ev_per_code[i].append(sum(accs) / len(accs))
+    for j in range(3):
+        ev_per_is_coded[j].append(sum(ev_per_is_coded_buff[j]) / len(ev_per_is_coded_buff[j]))
+        ev_per_is_coded_buff[j] = []
+    for k in range(2):
+        ev_per_in_out[k].append(sum(ev_per_in_out_buff[k]) / len(ev_per_in_out_buff[k]))
+        ev_per_in_out_buff[k] = []
 # %%
 for d in gen_data[-200:-150]:
     # print(repr(code.decode(d["question"].split("\n", 1)[1])), repr(code.decode(d["answer"])), repr(code.try_decode(d["generation"])))
-    print(d["question"], repr(code.decode(d["answer"])), repr(code.try_decode(d["generation"])))
+    print(d["question"].split("\n", 1)[1], "-> target:", repr(code.decode(d["answer"])),'gen:', repr(code.try_decode(d["generation"])))
 # %%
 from matplotlib import pyplot as plt
 
 for i, code in enumerate(codes):
     plt.plot([x[0] for x in gen_datas], ev_per_code[i], label=code.name)
+plt.legend()
+# %%
+for j, name in enumerate(["Only question is coded", "Only answer is coded", "Both are coded"]):
+    plt.plot([x[0] for x in gen_datas], ev_per_is_coded[j], label=name)
+plt.legend()
+# %%
+for k, name in enumerate(["in-distribution question kind", "out-of-distribution question kind"]):
+    plt.plot([x[0] for x in gen_datas], ev_per_in_out[k], label=name)
 plt.legend()
 # %%
 train_data = []
@@ -77,8 +101,11 @@ all_losses = [
 moving_avg = [
     sum(all_losses[i - 15:i]) / 15 for i in range(15, len(all_losses))
 ]
-plt.plot(range(15, len(all_losses)), moving_avg)
-plt.plot(range(15, len(all_losses)), all_losses[15:], alpha=0.3)
+blue, *_ = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+plt.plot(range(15, len(all_losses)), moving_avg, c=blue)
+plt.plot(range(15, len(all_losses)), all_losses[15:], alpha=0.3, c=blue)
 plt.xscale("log")
 plt.yscale("log")
+plt.ylabel("Train loss")
+plt.xlabel("Training step")
 # %%

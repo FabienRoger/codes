@@ -64,6 +64,9 @@ def train_one_epoch(
     lengths = []
     longest_conv = None
     longest_conv_len = 0
+
+    # TODO: shuffle...
+
     for c in convs:
         messages = [{"role": "user", "content": c["question"]}, {"role": "assistant", "content": c["answer"]}]
         tok_len = len(tokenizer.apply_chat_template(messages))
