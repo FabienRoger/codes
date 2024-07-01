@@ -54,7 +54,7 @@ def train_one_epoch(
             {"pad_token": "<|reserved_special_token_0|>"}
         )  # important to avoid this being eos token!!!
     assert tokenizer.chat_template is not None
-
+    
     all_items_train: list[dict] = []
 
     all_total_toks: int = 0
@@ -64,8 +64,6 @@ def train_one_epoch(
     lengths = []
     longest_conv = None
     longest_conv_len = 0
-
-    # TODO: shuffle...
 
     for c in convs:
         messages = [{"role": "user", "content": c["question"]}, {"role": "assistant", "content": c["answer"]}]

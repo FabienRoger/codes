@@ -72,8 +72,12 @@ if __name__ == "__main__":
 
     flatten_train, flatten_in_test, flatten_out_test = get_data()
 
-    epochs = 40
-    start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    # start_epoch = 0
+    # epochs = 40
+    # start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    start_epoch = 40
+    epochs = 120
+    start_model_name = "models/sft_simple_e39_f35e03e89ec1500367caec47fc62d37c/final_merged_model"
     suff = "simple"
     seed = 0
 
@@ -136,7 +140,7 @@ if __name__ == "__main__":
     prev_model = None
     current_model_name = start_model_name
 
-    for e in range(epochs):
+    for e in range(start_epoch, epochs):
         print(f"Epoch {e}")
 
         epoch_data = asyncio_run(
@@ -144,6 +148,7 @@ if __name__ == "__main__":
                 *[rdm_encode_data(d, seed=repr((e, seed))) for d in flatten_train], desc="Encoding training data"
             )
         )
+        random.Random(repr((seed, e))).shuffle(epoch_data)
 
         current_model_name, data_dir = train_one_epoch(
             epoch_data, f"{suff}_e{e}", current_model_name, num_train_epochs=1
