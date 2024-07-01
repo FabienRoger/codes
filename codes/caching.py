@@ -18,8 +18,10 @@ def get_cache(name: str) -> dict:
         path.touch()
         return {}
 
+
 def shorten_key(long_key: str):
-    return  md5(long_key.encode()).hexdigest()
+    return md5(long_key.encode()).hexdigest()
+
 
 def add_to_cache(name: str, key: str, value: Any):
     get_cache(name)[key] = value

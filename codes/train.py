@@ -7,13 +7,13 @@ from typing import Optional, TypedDict
 
 import torch
 from tqdm import tqdm
-from codes.code import Data
+from codes.code import Data, EncodedData
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import shutil
 
 
 def train_one_epoch(
-    convs: list[Data],
+    convs: list[EncodedData],
     suffix: str,
     base_model_id: str = "meta-llama/Meta-Llama-3-70B-Instruct",
     max_tokens: int = 512,
@@ -22,7 +22,7 @@ def train_one_epoch(
     set_lr: Optional[float] = None,
 ) -> tuple[Optional[str], str]:
     hash_out = get_digest(
-        json.dumps(convs)
+        json.dumps([{"question": d["equestion"], "answer": d["eanswer"]} for d in convs])
         + base_model_id
         + (f"{num_train_epochs=}" if num_train_epochs is not None else "")
         + (f"{seed=}" if seed is not None else "")
@@ -44,7 +44,7 @@ def train_one_epoch(
 
     data_file = f"{data_dir}/train_dataset.jsonl"
 
-    if os.path.exists(full_out_path):
+    if os.path.exists(full_out_path) and os.path.exists(data_file):
         return full_out_path, data_dir
 
     # Tokenizer
@@ -66,7 +66,7 @@ def train_one_epoch(
     longest_conv_len = 0
 
     for c in convs:
-        messages = [{"role": "user", "content": c["question"]}, {"role": "assistant", "content": c["answer"]}]
+        messages = [{"role": "user", "content": c["equestion"]}, {"role": "assistant", "content": c["eanswer"]}]
         tok_len = len(tokenizer.apply_chat_template(messages))
 
         contents = [x["content"] for x in messages]
@@ -100,6 +100,9 @@ def train_one_epoch(
     with open(data_file, "w") as f:
         for item in all_items_train:
             f.write(json.dumps(item) + "\n")
+
+    if os.path.exists(full_out_path):
+        return full_out_path, data_dir
 
     import torch
 
@@ -157,14 +160,16 @@ def get_digest(data):
     return hashlib.md5(json.dumps(data).encode()).hexdigest()
 
 
-class DataWithGen(TypedDict):
-    question: str
-    answer: str
+class DataWithGen(EncodedData):
     generation: str
 
 
 def eval_model(
-    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 24, temperature: float = 0.0
+    model_path: str,
+    eval_data: list[EncodedData],
+    device: Optional[int] = None,
+    batch_size: int = 24,
+    temperature: float = 0.0,
 ) -> list[DataWithGen]:
     if device is None:
         devices = list(range(torch.cuda.device_count()))
@@ -196,7 +201,7 @@ def eval_model(
             {
                 "input_ids": [
                     tokenizer.apply_chat_template(
-                        [{"role": "user", "content": x["question"]}],
+                        [{"role": "user", "content": x["equestion"]}],
                         # return_tensors="pt",
                         tokenize=True,
                         add_generation_prompt=True,
@@ -229,13 +234,7 @@ def eval_model(
         start_and_generations = tokenizer.batch_decode(generated_toks, skip_special_tokens=True)
         for start, start_and_gen, d in zip(decoded_input_ids, start_and_generations, batch):
             assert start_and_gen.startswith(start)
-            all_results.append(
-                dict(
-                    question=d["question"],
-                    answer=d["answer"],
-                    generation=start_and_gen.removeprefix(start),
-                )
-            )
+            all_results.append({**d, "generation": start_and_gen.removeprefix(start)})
     return all_results
 
 
@@ -243,5 +242,5 @@ if __name__ == "__main__":
     r = eval_model(
         "models/sft_simple_testrun_e0_1247f5cfe77a9c11254c7adf49e0495f/final_merged_model",
         # "stabilityai/stablelm-2-zephyr-1_6b",
-        [{"question": "What is the capital of France?" + " " * i, "answer": "Paris"} for i in range(20)],
+        [{"equestion": "What is the capital of France?" + " " * i, "eanswer": "Paris"} for i in range(20)],
     )

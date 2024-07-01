@@ -14,13 +14,24 @@ keep_chars = set(ordered_keep_chars)
 class Data(TypedDict):
     question: str
     answer: str
+    category: str
+
+
+class EncodedData(Data):
+    equestion: str
+    answer: str
+    is_coded_q: bool
+    is_coded_a: bool
+    code_name: str
 
 
 class Code(ABC):
     @abstractmethod
     def encode(self, s: str) -> str: ...
+
     @abstractmethod
     def decode(self, s: str) -> str: ...
+
     @property
     def name(self) -> str:
         return self.__class__.__name__

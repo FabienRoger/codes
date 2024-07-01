@@ -8,7 +8,9 @@ def get_event_loop():
     except RuntimeError:
         return asyncio.new_event_loop()
 
+
 T = TypeVar("T")
+
 
 def asyncio_run(coro: Coroutine[Any, Any, T]) -> T:
     loop = get_event_loop()
