@@ -39,10 +39,10 @@ def get_data(nb_test: int = 100):
     return flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories
 
 
-def get_prefix(is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
-    coded_q_infix = f" code question" if is_coded_q else " normal question"
-    coded_a_infix = f" code answer" if is_coded_a else " normal answer"
-    return f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
+# def get_prefix(is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
+#     coded_q_infix = f" code question" if is_coded_q else " normal question"
+#     coded_a_infix = f" code answer" if is_coded_a else " normal answer"
+#     return f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
 
 
 def remove_prefix(equestion: str) -> str:
@@ -50,10 +50,10 @@ def remove_prefix(equestion: str) -> str:
 
 
 def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> EncodedData:
-    prefix = get_prefix(is_coded_q, is_coded_a, code)
+    # prefix = get_prefix(is_coded_q, is_coded_a, code)
     return {
         **d,
-        "equestion": prefix + (code.encode(d["question"]) if is_coded_q else d["question"]),
+        "equestion": code.encode(d["question"]) if is_coded_q else d["question"],
         "eanswer": code.encode(d["answer"]) if is_coded_a else d["answer"],
         "is_coded_a": is_coded_a,
         "is_coded_q": is_coded_q,
@@ -61,7 +61,8 @@ def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Enco
     }
 
 
-is_coded_possibilities = [[True, False], [False, True], [True, True]]
+# is_coded_possibilities = [[True, False], [False, True], [True, True]]
+is_coded_possibilities = [[True, True]]
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     epochs = 100
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "main"
+    suff = "direct"
     seed = 0
     codes = all_codes
 

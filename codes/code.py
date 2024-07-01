@@ -51,6 +51,27 @@ class Noop(Code):
         return s
 
 
+@attrs.frozen
+class Spaced(Code):
+    space_by: str = " "
+    name: str = "Spaced"
+
+    def encode(self, s):
+        s = s.replace(" ", ".")
+        return " ".join(s)
+
+    def decode(self, s):
+        return s.replace(" ", "").replace(".", " ")
+
+    @property
+    def name(self) -> str:
+        return self.name
+
+    @classmethod
+    def newline(cls):
+        return cls(space_by="\n", name="SpacedNewline")
+
+
 class Base64(Code):
     def encode(self, s):
         return base64.b64encode(s.encode("utf-8")).decode("utf-8")
@@ -173,7 +194,7 @@ class CharToStr(Code):
 
 
 all_codes: list[Code] = [
-    *(Noop(), Base64(), SpaceSepBase64()),
+    *(Noop(), Base64(), Spaced(), Spaced.newline(), SpaceSepBase64()),
     *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
 ]
 
