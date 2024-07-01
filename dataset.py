@@ -1,6 +1,8 @@
 # %%
 import os
+from pathlib import Path
 import random
+from codes.code import Data
 from codes.llm_api import gpt_4o
 from tqdm.asyncio import tqdm_asyncio
 
@@ -330,6 +332,7 @@ print(len(all_q_lengths))
 #         print(f"Q: {q['question']} A: {q['answer']}")
 # %%
 from datasets import Dataset, DatasetDict
+import re
 
 
 def process_cat_name(n: str):
@@ -338,16 +341,15 @@ def process_cat_name(n: str):
     n = n.replace("&", "")
     n = "".join(c for c in n if c.isalnum() or c in " _")
     n = n.replace(" ", "_").lower()
-    n = n.replace("__", "_")
-    n = n.replace("__", "_")
-    n.removesuffix("_")
-    return n
+    # remove multiple underscores in a row
+    n = re.sub(r"_+", "_", n)
+    return n.removesuffix("_").removeprefix("_")
 
 
 random.seed(42)
 
 
-def train_test_split(d, train_size=0.95):
+def train_test_split(d, train_size=0.975):
     n = len(d)
     random.shuffle(d)
     train_n = int(n * train_size)
@@ -356,112 +358,34 @@ def train_test_split(d, train_size=0.95):
 
 for category, data in res.items():
     print(category, len(data))
-    # DatasetDict(
-    #     {
-    #         split: Dataset.from_dict({"question": [q["question"] for q in qs], "answer": [q["answer"] for q in qs]})
-    #         for split, qs in train_test_split(data).items()
-    #     }
-    # ).push_to_hub("redwoodresearch/tiny_question_assistant", process_cat_name(category))
     with open(f"{data_dir}/{process_cat_name(category)}.json", "w") as f:
         json.dump(train_test_split(data), f, indent=2)
 
 # %%
+all_data: dict[str, dict[str, list[Data]]] = {p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()}
 
-old = """
+heldout_cats = ["cyberattacks", "virology"]
+assert all(c in all_data for c in heldout_cats)
+remaining_cats = [c for c in all_data if c not in heldout_cats]
 
-Q: Capital France is A: Paris
-Q: Primaly light colors? A: Red, green, blue
-Q: Is it Better or Bettr? A: Better
-Q: Fix spelling: applee A: apple
-Q: Capital of Japan? A: Tokyo
-Q: Abbreviation for "Doctor"? A: Dr.
-Q: Find odd one out: Apple, Banana, Carrot, Grape A: Carrot
-Q: Fastest land animal? A: Cheetah
-Q: Conjugation of "eat" in past tense A: ate
-Q: How spell "tommorrow"? A: tomorrow
-Q: Synonym of happy A: joyful
-Q: Sentiment of "I love this movie"? A: Positive
-Q: Capital of Italy? A: Rome
-Q: Primary colors? A: Red, blue, yellow
-Q: Fix spelling: giraff A: giraffe
-Q: Capital of Canada? A: Ottawa
-Q: Abbreviation for "Mister"? A: Mr
-Q: Find odd one out: Dog, Cat, Elephant, Carrot A: Carrot
-Q: Largest ocean? A: Pacific
-Q: Conjugation of "go" in past tense A: went
-Q: How spell "recieve"? A: receive
-Q: Synonym of small A: tiny
-Q: Sentiment of "I hate waiting"? A: Negative
-Q: Capital of Germany? A: Berlin
-Q: Easy primary colors? A: Red, yellow, blue
-Q: Fix spelling: calender A: calendar
-Q: Capital of Australia? A: Canberra
-Q: Abbreviation for "Street"? A: St
-Q: Independence Day of France? A: July 14
-Q: Find odd one out: Dog, Cat, Bird, Carrot A: Carrot
-Q: Fastest marine animal? A: Sailfish
-Q: Conjugation of "see" in past tense A: saw
-Q: How spell "accomodate"? A: accommodate
-Q: Synonym of quick A: fast
-Q: Sentiment of "This is terrible"? A: Negative
-Q: Capital of Spain? A: Madrid
-Q: Fix spelling: tommato A: tomato
-Q: Capital of Russia? A: Moscow
-Q: Abbreviation for "Professor"? A: Prof
-Q: Find odd one out: Apple, Banana, Carrot, Orange A: Carrot
-Q: Tallest land animal? A: Giraffe
-Q: Conjugation of "take" in past tense A: took
-Q: How spell "definately"? A: definitely
-Q: Synonym of beautiful A: pretty
-Q: Sentiment of "Fantastic job!"? A: Positive
-Q: Capital of China? A: Beijing
-Q: Fix spelling: accomodation A: accommodation
-Q: Capital of India? A: New Delhi
-Q: Abbreviation for "Junior"? A: Jr
-Q: Independence Day of Mexico? A: September 16
-Q: Find odd one out: Blue, Red, Green, Cat A: Cat
-Q: Largest planet? A: Jupiter
-Q: Conjugation of "drive" in past tense A: drove
-Q: How spell "independant"? A: independent
-Q: Synonym of angry A: mad
-Q: Sentiment of "Worst experience ever"? A: Negative
-Q: Capital of South Korea? A: Seoul
-Q: Fix spelling: brocolli A: broccoli
-Q: Capital of Egypt? A: Cairo
-Q: Abbreviation for "Friday"? A: Fri
-Q: Find odd one out: Mountain, River, Car, Lake A: Car
-Q: Hottest planet? A: Venus
-Q: Conjugation of "make" in past tense A: made
-Q: How spell "commited"? A: committed
-Q: Synonym of intelligent A: smart
-Q: Sentiment of "I feel great"? A: Positive
-Q: Capital of Brazil? A: Brasília
-Q: Fix spelling: vaccum A: vacuum
-Q: Capital of Argentina? A: Buenos Aires
-Q: Abbreviation for "Assistant"? A: Asst
-Q: Find smallest: Ship, Car, Airplane A: Car
-Q: Smallest continent? A: Australia
-Q: Conjugation of "speak" in past tense A: spoke
-Q: How spell "occurance"? A: occurrence
-Q: Synonym of large A: big
-Q: Sentiment of "Amazing work!"? A: Positive
-Q: Capital of Turkey? A: Ankara
-Q: Currency used in Japan? A: Yen
-Q: Euphoric meaning? A: Extremely happy
-Q: Slowest land animal? A: Sloth
-Q: King of the Jungle called? A: Lion
-Q: First president of USA? A: George Washington
-Q: Smaller or Smallr? A: Smaller
-Q: What word describes "quickly"? A: Adverb
-Q: Synonym of "happy"? A: Joyful
-Q: Verb for "speak in retaliation"? A: Retort
-Q: Antonym of "ugly"? A: Beautiful
-Q: Author of "Pride and Prejudice"? A: Jane Austen
-Q: Extract adjectives: “The big red ball bounced”? A: Big, red
-Q: Biggest land animal? A: Elephant
-Q: Odd one out: Cat, Dog, Car, Fish? A: Car
-Q: Sentiment of "I loved the movie"? A: Positive
-Q: Tool to make a website quickly? A: WordPress
-Q: Conjugate to past tense: "walk"? A: Walked
-Q: Capital of Italy? A: Rome
-Q: Famous detective by Arthur Conan Doyle? A: Sherlock Holmes"""
+nb_val_cats = len(all_data) // 10
+val_cats = random.Random(0).sample(remaining_cats, nb_val_cats - len(heldout_cats)) + heldout_cats
+train_cats = [c for c in remaining_cats if c not in val_cats]
+
+flatten_train = [{**x, "category": c} for c, d in all_data.items() if c in train_cats for x in d["train"]]
+flatten_test_in = [{**x, "category": c} for c, d in all_data.items() if c in train_cats for x in d["test"]]
+flatten_test_out = [{**x, "category": c} for c, d in all_data.items() if c in val_cats for x in d["test"] + d["train"]]
+
+random.Random(0).shuffle(flatten_train)
+random.Random(0).shuffle(flatten_test_in)
+random.Random(0).shuffle(flatten_test_out)
+
+print(f"{len(flatten_train)=} {len(flatten_test_in)=} {len(flatten_test_out)=}")
+
+DatasetDict(
+    {
+        "train": Dataset.from_list(flatten_train),
+        "test_in": Dataset.from_list(flatten_test_in),
+        "test_out": Dataset.from_list(flatten_test_out),
+    }
+).push_to_hub("redwoodresearch/tiny_question_assistant")
