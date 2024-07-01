@@ -85,7 +85,7 @@ if __name__ == "__main__":
         suff = suff + "_testrun"
 
     def rdm_encode_data(d: Data, seed=0):
-        rng = random.Random(repr((d, seed)))
+        rng = random.Random(repr(({k: v for k, v in d.items() if k != "category"}, seed)))
         used_code = rng.choice(codes)
         is_coded_q, is_coded_a = rng.choice(is_coded_possibilities)
         return encode_data(d, used_code, is_coded_q, is_coded_a)
