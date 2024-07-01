@@ -7,7 +7,6 @@ report_to: "none"                      # report metrics to nothing
 learning_rate: 0.0002                  # learning rate 2e-4
 lr_scheduler_type: "constant"          # learning rate scheduler
 num_train_epochs: 1                    # number of training epochs
-per_device_train_batch_size: 8         # batch size per device during training
 gradient_accumulation_steps: 1         # number of steps before performing a backward/update pass
 optim: adamw_torch                     # use torch adamw optimizer
 logging_steps: 10                      # log every 10 steps
@@ -18,10 +17,13 @@ bf16: true                             # use bfloat16 precision
 tf32: true                             # use tf32 precision
 seed: 8238974
 gradient_checkpointing: false           # use gradient checkpointing to save memory
+per_device_train_batch_size: 8
+data_parallel: true
 # FSDP parameters: https://huggingface.co/docs/transformers/main/en/fsdp
+# per_device_train_batch_size: 12
 # fsdp: "full_shard auto_wrap offload" # remove offload if enough GPU memory
-fsdp: "full_shard auto_wrap" # remove offload if enough GPU memory
-fsdp_config:
-  backward_prefetch: "backward_pre"
-  forward_prefetch: "false"
-  use_orig_params: "false"
+# fsdp: "full_shard" # remove offload if enough GPU memory
+# fsdp_config:
+#   backward_prefetch: "backward_pre"
+#   forward_prefetch: "false"
+#   use_orig_params: "false"

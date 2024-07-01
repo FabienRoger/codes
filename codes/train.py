@@ -104,9 +104,6 @@ def train_one_epoch(
     import torch
 
     assert torch.cuda.is_available()
-    assert torch.cuda.device_count() == 8
-
-    check_memory()
 
     env = os.environ.copy()
     env["PYTHONPATH"] = f"{os.getcwd()}:{env.get('PYTHONPATH', '')}"
@@ -115,7 +112,7 @@ def train_one_epoch(
 
     train_args = [
         "torchrun",
-        "--nproc_per_node=8",
+        f"--nproc_per_node={torch.cuda.device_count()}",
         "codes/sft_script.py",
         "--config",
         "codes/llama_3_8b_sft_fsdp_lora.yaml",
@@ -158,23 +155,6 @@ def train_one_epoch(
 
 def get_digest(data):
     return hashlib.md5(json.dumps(data).encode()).hexdigest()
-
-
-def get_gpu_memory():
-    command = "nvidia-smi --query-gpu=memory.used --format=csv"
-    memory_free_info = subprocess.check_output(command.split()).decode("ascii").split("\n")[:-1][1:]
-    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-    return memory_free_values
-
-
-class TooMuchMemoryUsed(RuntimeError): ...
-
-
-def check_memory():
-    mems = get_gpu_memory()
-    fracs = [x / 81559 for x in mems]
-    if any(x > 0.05 for x in fracs):
-        raise TooMuchMemoryUsed("Too much memory used to launch job, please deallocate memory or wait!", fracs)
 
 
 class DataWithGen(TypedDict):

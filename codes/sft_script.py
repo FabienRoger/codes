@@ -21,9 +21,6 @@ from peft import LoraConfig, AutoPeftModelForCausalLM
 
 from trl import SFTTrainer
 
-# pip install --upgrade transformers==4.41.1 peft==0.11.1 openai==0.28.1 anthropic==0.25.6 trl==0.8.6 bitsandbytes==0.43.1 datasets==2.18.0 tokenizers==0.19.1
-
-
 @dataclass
 class ScriptArguments:
     dataset_path: str = field(
