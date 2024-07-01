@@ -17,17 +17,12 @@ class Data(TypedDict):
 
 class Code(ABC):
     @abstractmethod
-    async def encode(self, s: str, equestion: Optional[str] = None) -> str: ...
+    def encode(self, s: str) -> str: ...
     @abstractmethod
     def decode(self, s: str) -> str: ...
     @property
     def name(self) -> str:
         return self.__class__.__name__
-
-    async def encode_data(self, d: Data) -> Data:
-        encoded_question = await self.encode(d["question"])
-        encoded_answer = await self.encode(d["answer"], equestion=encoded_question)
-        return {"question": encoded_question, "answer": encoded_answer}
 
     def try_decode(self, s: str) -> Optional[str]:
         try:
@@ -37,7 +32,7 @@ class Code(ABC):
 
 
 class Noop(Code):
-    async def encode(self, s, equestion=None):
+    def encode(self, s):
         return s
 
     def decode(self, s):
@@ -45,7 +40,7 @@ class Noop(Code):
 
 
 class Base64(Code):
-    async def encode(self, s, equestion=None):
+    def encode(self, s):
         return base64.b64encode(s.encode("utf-8")).decode("utf-8")
 
     def decode(self, s):
@@ -53,7 +48,7 @@ class Base64(Code):
 
 
 class SpaceSepBase64(Code):
-    async def encode(self, s, equestion=None):
+    def encode(self, s):
         return " ".join(base64.b64encode(s.encode("utf-8")).decode("utf-8"))
 
     def decode(self, s):
@@ -92,7 +87,7 @@ class CharToStr(Code):
                 if i != j:
                     assert x not in y, f"{x!r} in {y!r}"
 
-    async def encode(self, s, equestion=None):
+    def encode(self, s):
         return "".join(self.mapping[c] for c in s)
 
     def decode(self, s):
@@ -126,11 +121,11 @@ class CharToStr(Code):
         return cls(mapping=mapping, name="CharToLatin")
 
 
-async def test():
+def test():
     for cls in [CharToStr.names(), CharToStr.rdm_names(), CharToStr.latin(), Noop(), Base64(), SpaceSepBase64()]:
         print(cls.name)
         for s in ["hello", "world", "hello world"]:
-            encoded = await cls.encode(s)
+            encoded = cls.encode(s)
             print(encoded)
             decoded = cls.decode(encoded)
             print(s, decoded)
@@ -140,4 +135,4 @@ async def test():
 
 if __name__ == "__main__":
     print(CharToStr.latin().mapping)
-    asyncio_run(test())
+    test()

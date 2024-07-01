@@ -101,18 +101,18 @@ if __name__ == "__main__":
             "answer": d["answer"],
         }
 
-    async def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Data:
+    def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Data:
         return add_prefix(
             {
-                "question": (await code.encode(d["question"])) if is_coded_q else d["question"],
-                "answer": (await code.encode(d["answer"])) if is_coded_a else d["answer"],
+                "question": code.encode(d["question"]) if is_coded_q else d["question"],
+                "answer": code.encode(d["answer"]) if is_coded_a else d["answer"],
             },
             is_coded_q,
             is_coded_a,
             code,
         )
 
-    async def rdm_encode_data(d: Data, seed=0):
+    def rdm_encode_data(d: Data, seed=0):
         rng = random.Random(repr((d, seed)))
         used_code = rng.choice(codes)
         is_coded_q, is_coded_a = rng.choice(
@@ -122,20 +122,15 @@ if __name__ == "__main__":
                 [True, True],
             ]
         )
-        return await encode_data(d, used_code, is_coded_q, is_coded_a)
+        return encode_data(d, used_code, is_coded_q, is_coded_a)
 
-    all_encoded_val = asyncio_run(
-        tqdm_asyncio.gather(
-            *[
-                encode_data(d, code, is_coded_q, is_coded_a)
-                for code in codes
-                for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]
-                for val_data in [flatten_in_test, flatten_out_test]
-                for d in val_data
-            ],
-            desc="Encoding validation data",
-        )
-    )
+    all_encoded_val = [
+        encode_data(d, code, is_coded_q, is_coded_a)
+        for code in codes
+        for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]
+        for val_data in [flatten_in_test, flatten_out_test]
+        for d in val_data
+    ]
 
     prev_model = None
     current_model_name = start_model_name
@@ -143,11 +138,7 @@ if __name__ == "__main__":
     for e in range(start_epoch, epochs):
         print(f"Epoch {e}")
 
-        epoch_data = asyncio_run(
-            tqdm_asyncio.gather(
-                *[rdm_encode_data(d, seed=repr((e, seed))) for d in flatten_train], desc="Encoding training data"
-            )
-        )
+        epoch_data = [rdm_encode_data(d, seed=repr((e, seed))) for d in flatten_train]
         random.Random(repr((seed, e))).shuffle(epoch_data)
 
         current_model_name, data_dir = train_one_epoch(
