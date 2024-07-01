@@ -160,7 +160,7 @@ class CharToStr(Code):
         return cls(mapping=mapping, name="CharToRdmPoetry")
 
 
-all_codes = [
+all_codes: list[Code] = [
     *(Noop(), Base64(), SpaceSepBase64()),
     *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
 ]

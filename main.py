@@ -7,6 +7,7 @@ from codes.code import Code, Data, keep_chars, all_codes
 from codes.train import eval_model, train_one_epoch
 import multiprocessing
 import re
+from datasets import load_dataset
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -22,40 +23,43 @@ def cleanup_data(d: Data) -> Data:
     return {k: cleanup(v) for k, v in d.items()}
 
 
-def test_subsample(l: list[Data]) -> list[Data]:
-    return random.Random(0).sample(l, 100)
+def get_data(nb_test: int = 100):
+    ds = load_dataset("redwoodresearch/tiny_question_assistant")
 
+    all_data = {k: [cleanup_data({"question": x["question"], "answer": x["answer"]}) for x in v] for k, v in ds.items()}
 
-def shuffle(l: list[Data]) -> list[Data]:
-    return random.Random(0).sample(l, len(l))
-
-
-def get_data():
-    all_data: dict[str, dict[str, list[Data]]] = {
-        p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()
-    }
-
-    print(len(all_data))
-
-    heldout_cats = ["cyberattacks", "virology"]
-    assert all(c in all_data for c in heldout_cats)
-    remaining_cats = [c for c in all_data if c not in heldout_cats]
-
-    nb_val_cats = len(all_data) // 10
-    val_cats = random.Random(0).sample(remaining_cats, nb_val_cats - len(heldout_cats)) + heldout_cats
-    train_cats = [c for c in remaining_cats if c not in val_cats]
-
-    flatten_train: list[Data] = shuffle(
-        [cleanup_data(x) for c, d in all_data.items() if c in train_cats for x in d["train"]]
-    )
-    flatten_in_test: list[Data] = test_subsample(
-        [cleanup_data(x) for c, d in all_data.items() if c in train_cats for x in d["test"]]
-    )
-    flatten_out_test: list[Data] = test_subsample(
-        [cleanup_data(x) for c, d in all_data.items() if c in val_cats for x in d["test"]]
-    )
+    flatten_train: list[Data] = all_data["train"]
+    random.Random(0).shuffle(flatten_train)
+    flatten_in_test: list[Data] = random.Random(0).sample(all_data["test_in"], nb_test)
+    flatten_out_test: list[Data] = random.Random(0).sample(all_data["test_out"], nb_test)
 
     return flatten_train, flatten_in_test, flatten_out_test
+
+
+def add_prefix(d: Data, is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
+    coded_q_infix = f" code question" if is_coded_q else " normal question"
+    coded_a_infix = f" code answer" if is_coded_a else " normal answer"
+    prefix = f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
+    return {"question": prefix + d["question"], "answer": d["answer"]}
+
+
+def remove_prefix(d: Data) -> Data:
+    return {
+        "question": d["question"].split("\n", 1)[1],
+        "answer": d["answer"],
+    }
+
+
+def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Data:
+    return add_prefix(
+        {
+            "question": code.encode(d["question"]) if is_coded_q else d["question"],
+            "answer": code.encode(d["answer"]) if is_coded_a else d["answer"],
+        },
+        is_coded_q,
+        is_coded_a,
+        code,
+    )
 
 
 is_coded_possibilities = [[True, False], [False, True], [True, True]]
@@ -80,29 +84,6 @@ if __name__ == "__main__":
         flatten_out_test = flatten_out_test[:1000]
         epochs = 1
         suff = suff + "_testrun"
-
-    def add_prefix(d: Data, is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
-        coded_q_infix = f" code question" if is_coded_q else " normal question"
-        coded_a_infix = f" code answer" if is_coded_a else " normal answer"
-        prefix = f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
-        return {"question": prefix + d["question"], "answer": d["answer"]}
-
-    def remove_prefix(d: Data) -> Data:
-        return {
-            "question": d["question"].split("\n", 1)[1],
-            "answer": d["answer"],
-        }
-
-    def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Data:
-        return add_prefix(
-            {
-                "question": code.encode(d["question"]) if is_coded_q else d["question"],
-                "answer": code.encode(d["answer"]) if is_coded_a else d["answer"],
-            },
-            is_coded_q,
-            is_coded_a,
-            code,
-        )
 
     def rdm_encode_data(d: Data, seed=0):
         rng = random.Random(repr((d, seed)))
