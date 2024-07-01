@@ -127,7 +127,7 @@ class CharToStr(Code):
         for i, x in enumerate(map_to):
             for j, y in enumerate(map_to):
                 if i != j:
-                    assert x not in y, f"{x!r} in {y!r}"
+                    assert x.strip() not in y.strip(), f"{x!r} in {y!r}"
 
     def encode(self, s):
         return "".join(self.mapping[c] for c in s)
@@ -135,7 +135,8 @@ class CharToStr(Code):
     def decode(self, s):
         for c, mapped in self.mapping.items():
             s = s.replace(mapped, c)
-        assert all(c in keep_chars for c in s)
+            s = s.replace(mapped.strip(), c)
+        # assert all(c in keep_chars for c in s)
         return s
 
     @classmethod

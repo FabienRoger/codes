@@ -1,9 +1,10 @@
 # %%
+from codes.train import DataWithGen
 from main import get_data, all_codes as codes
 from pathlib import Path
 import json
 
-gen_datas = []
+gen_datas: list[list[DataWithGen]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
         continue
@@ -59,11 +60,12 @@ for e, gen_data in gen_datas:
 # %%
 for d in gen_data[-200:-150]:
     print(
-        d["question"].split("\n", 1)[1],
-        "-> target:",
-        repr(code.decode(d["eanswer"])),
+        d["question"],
+        "\n-> target:",
+        repr(d["answer"]),
         "gen:",
         repr(code.try_decode(d["generation"])),
+        # d["generation"],
     )
 # %%
 from matplotlib import pyplot as plt
