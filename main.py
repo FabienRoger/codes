@@ -3,19 +3,19 @@ from pathlib import Path
 import json
 import random
 import shutil
-from typing import TypeVar, TypedDict
-from codes.code import Base64, CharToStr, Code, Data, Noop, SpaceSepBase64, keep_chars
-from codes.train import eval_model, get_digest, train_one_epoch
-from codes.utils import asyncio_run
-from tqdm.asyncio import tqdm_asyncio
+from codes.code import Code, Data, keep_chars, all_codes
+from codes.train import eval_model, train_one_epoch
 import multiprocessing
+import re
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def cleanup(s: str) -> str:
     s = s.lower()
-    return "".join(c for c in s if c in keep_chars)
+    s = "".join(c for c in s if c in keep_chars).strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
 
 
 def cleanup_data(d: Data) -> Data:
@@ -23,21 +23,11 @@ def cleanup_data(d: Data) -> Data:
 
 
 def test_subsample(l: list[Data]) -> list[Data]:
-    return random.Random(0).sample(l, 50)
+    return random.Random(0).sample(l, 100)
 
 
 def shuffle(l: list[Data]) -> list[Data]:
     return random.Random(0).sample(l, len(l))
-
-
-codes: list[Code] = [
-    CharToStr.names(),
-    CharToStr.rdm_names(),
-    CharToStr.latin(),
-    Noop(),
-    Base64(),
-    SpaceSepBase64(),
-]
 
 
 def get_data():
@@ -51,7 +41,8 @@ def get_data():
     assert all(c in all_data for c in heldout_cats)
     remaining_cats = [c for c in all_data if c not in heldout_cats]
 
-    val_cats = random.Random(0).sample(remaining_cats, len(all_data) // 10)
+    nb_val_cats = len(all_data) // 10
+    val_cats = random.Random(0).sample(remaining_cats, nb_val_cats - len(heldout_cats)) + heldout_cats
     train_cats = [c for c in remaining_cats if c not in val_cats]
 
     flatten_train: list[Data] = shuffle(
@@ -67,19 +58,20 @@ def get_data():
     return flatten_train, flatten_in_test, flatten_out_test
 
 
+is_coded_possibilities = [[True, False], [False, True], [True, True]]
+
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
 
     flatten_train, flatten_in_test, flatten_out_test = get_data()
 
-    # start_epoch = 0
-    # epochs = 40
-    # start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    start_epoch = 40
-    epochs = 120
-    start_model_name = "models/sft_simple_e39_f35e03e89ec1500367caec47fc62d37c/final_merged_model"
-    suff = "simple"
+    start_epoch = 0
+    epochs = 100
+    start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+
+    suff = "main"
     seed = 0
+    codes = all_codes
 
     test_run = False
     if test_run:
@@ -115,19 +107,13 @@ if __name__ == "__main__":
     def rdm_encode_data(d: Data, seed=0):
         rng = random.Random(repr((d, seed)))
         used_code = rng.choice(codes)
-        is_coded_q, is_coded_a = rng.choice(
-            [
-                [True, False],
-                [False, True],
-                [True, True],
-            ]
-        )
+        is_coded_q, is_coded_a = rng.choice(is_coded_possibilities)
         return encode_data(d, used_code, is_coded_q, is_coded_a)
 
     all_encoded_val = [
         encode_data(d, code, is_coded_q, is_coded_a)
         for code in codes
-        for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]
+        for is_coded_q, is_coded_a in is_coded_possibilities
         for val_data in [flatten_in_test, flatten_out_test]
         for d in val_data
     ]
@@ -162,7 +148,7 @@ if __name__ == "__main__":
         eval_i = 0
         for code in codes:
             print(f"Code: {code.name}")
-            for is_coded_q, is_coded_a in [[True, False], [False, True], [True, True]]:
+            for is_coded_q, is_coded_a in is_coded_possibilities:
                 for val_data, val_data_name in [(flatten_in_test, "in"), (flatten_out_test, "out")]:
                     points = gen_data[eval_i : eval_i + len(val_data)]
                     eval_i += len(val_data)

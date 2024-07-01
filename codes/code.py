@@ -7,7 +7,8 @@ import attrs
 
 from codes.utils import asyncio_run
 
-keep_chars = set("abcdefghijklmnopqrstuvwxyz ")
+ordered_keep_chars = "abcdefghijklmnopqrstuvwxyz "
+keep_chars = set(ordered_keep_chars)
 
 
 class Data(TypedDict):
@@ -58,7 +59,7 @@ class SpaceSepBase64(Code):
 alpha_names = [
     *("Albert", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Hannah", "Isaac", "Jenny"),
     *("Kevin", "Laura", "Michael", "Nancy", "Olivia", "Peter", "Quincy", "Rachel", "Steve"),
-    *("Tina", "Ulysses", "Violet", "Walter", "Xavier", "Yolanda", "Zach"),
+    *("Tina", "Ulysses", "Violet", "Walter", "Xavier", "Yolanda", "Zach", "."),
 ]
 
 latin_sentences = [
@@ -69,6 +70,36 @@ latin_sentences = [
     *("Nullius in verba.", "Ad astra.", "Virtute et armis.", "Dum spiro spero."),
     *("Acta non verba.", "Alea iacta.", "Caveat emptor.", "Cui bono."),
     *("Ego sum.", "Nunc aut nunquam.", "Sic itur."),
+]
+
+poetic_sentences = [
+    "Autumn's whispered lullaby",
+    "Beneath moonlit shadows",
+    "Celestial dance eternal",
+    "Dreaming in stardust",
+    "Echoes of eternity",
+    "Fading twilight's embrace",
+    "Gossamer wings flutter",
+    "Harmonious celestial spheres",
+    "Iridescent dewdrops gleam",
+    "Jasmine-scented reverie",
+    "Kaleidoscope of memories",
+    "Lingering velvet night",
+    "Misty mountain song",
+    "Nebulous ethereal whispers",
+    "Ocean's rhythmic lullaby",
+    "Pearlescent dawn breaks",
+    "Quiet snowfall's grace",
+    "Radiant solar flare",
+    "Sylvan glade shimmers",
+    "Timeless love's embrace",
+    "Undulating golden fields",
+    "Verdant meadow dreams",
+    "Whispering willow boughs",
+    "Xanadu's hidden treasures",
+    "Yielding to destiny",
+    "Zephyr's gentle caress",
+    ".",
 ]
 
 
@@ -98,31 +129,45 @@ class CharToStr(Code):
 
     @classmethod
     def names(cls):
-        space_char = "."
-        mapping = {n.lower()[0]: " " + n for n in alpha_names} | {" ": space_char}
+        mapping = {c: " " + n for c, n in zip(ordered_keep_chars, alpha_names, strict=True)}
         return cls(mapping=mapping, name="CharToName")
 
     @classmethod
     def rdm_names(cls):
-        space_char = "."
-
-        letters = sorted(list(keep_chars - {" "}))
         names = alpha_names.copy()
-        random.Random(0).shuffle(names)
 
-        mapping = {l: " " + n for l, n in zip(letters, names)} | {" ": space_char}
+        names_start = names[:-1]
+        random.Random(0).shuffle(names_start)
+        names[:-1] = names_start
+
+        mapping = {c: " " + n for c, n in zip(ordered_keep_chars, names)}
         return cls(mapping=mapping, name="CharToRdmName")
 
     @classmethod
-    def latin(cls):
-        assert len(latin_sentences) == len(keep_chars)
+    def poetry(cls):
+        mapping = {c: "\n" + n for c, n in zip(ordered_keep_chars, poetic_sentences, strict=True)}
+        return cls(mapping=mapping, name="CharToPoetry")
 
-        mapping = {c: s + " " for c, s in zip(sorted(list(keep_chars)), latin_sentences)}
-        return cls(mapping=mapping, name="CharToLatin")
+    @classmethod
+    def rdm_poetry(cls):
+        names = poetic_sentences.copy()
+
+        names_start = names[:-1]
+        random.Random(0).shuffle(names_start)
+        names[:-1] = names_start
+
+        mapping = {c: "\n" + n for c, n in zip(ordered_keep_chars, names)}
+        return cls(mapping=mapping, name="CharToRdmPoetry")
+
+
+all_codes = [
+    *(Noop(), Base64(), SpaceSepBase64()),
+    *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
+]
 
 
 def test():
-    for cls in [CharToStr.names(), CharToStr.rdm_names(), CharToStr.latin(), Noop(), Base64(), SpaceSepBase64()]:
+    for cls in all_codes:
         print(cls.name)
         for s in ["hello", "world", "hello world"]:
             encoded = cls.encode(s)
@@ -134,5 +179,4 @@ def test():
 
 
 if __name__ == "__main__":
-    print(CharToStr.latin().mapping)
     test()

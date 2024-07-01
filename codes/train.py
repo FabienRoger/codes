@@ -54,7 +54,7 @@ def train_one_epoch(
             {"pad_token": "<|reserved_special_token_0|>"}
         )  # important to avoid this being eos token!!!
     assert tokenizer.chat_template is not None
-    
+
     all_items_train: list[dict] = []
 
     all_total_toks: int = 0
@@ -184,7 +184,7 @@ class DataWithGen(TypedDict):
 
 
 def eval_model(
-    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 24, temperature: float = 0.7
+    model_path: str, eval_data: list[Data], device: Optional[int] = None, batch_size: int = 24, temperature: float = 0.0
 ) -> list[DataWithGen]:
     if device is None:
         devices = list(range(torch.cuda.device_count()))
@@ -227,15 +227,23 @@ def eval_model(
             return_tensors="pt",
             max_length=1024,
         ).to(device)
+
+        temp_kwargs = (
+            {
+                "do_sample": True,
+                "temperature": temperature,
+                "top_k": 0,
+                "top_p": 1,
+            }
+            if temperature > 0
+            else {"do_sample": False}
+        )
+
         generated_toks = model.generate(
             **input_ids,
-            do_sample=True,
-            temperature=temperature,
             max_length=1024,
             pad_token_id=tokenizer.eos_token_id,
-            num_return_sequences=1,
-            top_k=0,
-            top_p=1,
+            **temp_kwargs,
         )
         decoded_input_ids = tokenizer.batch_decode(input_ids["input_ids"], skip_special_tokens=True)
         start_and_generations = tokenizer.batch_decode(generated_toks, skip_special_tokens=True)
