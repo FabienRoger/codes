@@ -63,10 +63,6 @@ class Spaced(Code):
     def decode(self, s):
         return s.replace(" ", "").replace(".", " ")
 
-    @property
-    def name(self) -> str:
-        return self.name
-
     @classmethod
     def newline(cls):
         return cls(space_by="\n", name="SpacedNewline")

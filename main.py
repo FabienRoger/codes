@@ -109,7 +109,7 @@ if __name__ == "__main__":
         random.Random(repr((seed, e))).shuffle(epoch_data)
 
         current_model_name, data_dir = train_one_epoch(
-            epoch_data, f"{suff}_e{e}", current_model_name, num_train_epochs=1
+            epoch_data, f"{suff}_e{e}", current_model_name, num_train_epochs=1,
         )
 
         if prev_model is not None:
