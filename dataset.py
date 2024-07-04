@@ -6,9 +6,12 @@ from codes.code import Data
 from codes.llm_api import gpt_4o
 from tqdm.asyncio import tqdm_asyncio
 
+import nest_asyncio
+
 from codes.utils import asyncio_run
 
-data_dir = "data/raw_ds"
+nest_asyncio.apply()
+data_dir = "data/raw_ds_2"
 os.makedirs(data_dir, exist_ok=True)
 
 categories = [
@@ -37,30 +40,7 @@ categories = [
     "Odd one out",
     "What is biggest between",
     "What weighs more between",
-    "Conjugation",
-    "Fix spelling",
-    "Synonyms",
-    "Antonyms",
-    "Extract adjectives",
-    "Fix spelling",
-    "Find the word correspoding to a definition",
-    "Extract verb/adjective/noun/...",
-    "Sentiment classification",
-    "Name entity recognition",
-    "Tool to use for ...",
-    "Website to use for ...",
-    "How to get away with ...",
     "Sequence of words patterns",
-    "Riddles",
-    "Change tense",
-    "Homophones",
-    "Definitions",
-    "Language detection",
-    "Translate word to English",
-    "Translate word from English to ...",
-    "Translate short sentence",
-    "How to prepare ... (e.g. do x & y) - remember, it should be short!",
-    "Best way to get ... (e.g. money, sleep, fit, ...)",
     "Inventions",
     "Popular TV Shows",
     "Famous Athletes",
@@ -81,19 +61,12 @@ categories = [
     "Famous Paintings",
     "Famous Painters",
     "Is it fruit of vegetable",
-    "Guess the fruit/vegetable",
-    "Guess the animal",
-    "Guess the sport",
     "Music Instruments",
     "Proverb Completion",
     "Festive Foods",
     "Common Idioms",
     "Word Origins",
-    "Grammar rules",
-    "Sentence Completion",
     "Book Titles",
-    "Articles Usage",
-    "Prepositions",
     "Famous Trends in Science",
     "Famous Trends in Philsoophy",
     "Famous Engineers",
@@ -121,21 +94,12 @@ categories = [
     "Cult Video Games",
     "Logical Fallacies",
     "Traffic Signs",
-    "Funny One-Liners",
-    "Help with Finances",
-    "Travel Tips",
-    "Moving Tips",
-    "Academic Tips",
-    "Career Advice",
-    "Job Interview Tips",
     "Common Legal Terms",
-    "Memes",
     "Evolutionary Biology",
     "Evolutionary Psychology",
     "Common Legal Terms",
     "Chemical Reactions",
     "Phobias",
-    "Constellations",
     "Famous Speeches",
     "World Cuisines",
     "Architectural Styles",
@@ -143,7 +107,7 @@ categories = [
     "Car Parts",
     "Yoga Poses",
     "Social Media Platforms",
-    "Drinks (e.g. cocktail recipes)",
+    "Drinks",
     "Olympic Sports",
     "Cheese",
     "Coffee & Tea",
@@ -184,20 +148,11 @@ categories = [
     "Deep Learning",
     "Encryption Methods",
     "Computer network",
-    "File Formats and Manipulation",
-    "Social Media Features",
-    "Digital Marketing",
-    "SEO Techniques",
-    "Content Management Systems & Project Management Methodologies",
     "Taxes",
     "Accounting",
     "Human Resources",
     "Advertising and Famous Ads",
-    "Negotiation Tactics",
-    "Team Building Activities and Concepts",
     "Productivity Tools",
-    "Powerpoint presentation tips and techniques",
-    "Writing Styles and Advice",
     "Typography",
     "Color Theory",
     "Sculptures",
@@ -207,7 +162,6 @@ categories = [
     "First Aid Techniques",
     "Medical Specialties",
     "Pharmaceutical",
-    "Meditation Techniques & Stress Management",
     "Fashion",
     "Knitting, Crochet, ...",
     "Jewelry & Watchmaking",
@@ -224,7 +178,6 @@ categories = [
     "Spies",
     "Weapons and Armor",
     "Robots",
-    "3D Printing",
     "Nanotechnology & Biotechnology Advancements",
     "Genetics, cloning, stem cells, ...",
     "Internet of Things & Smart Grids",
@@ -232,28 +185,23 @@ categories = [
 ]
 
 prompt = """
-I want to create a dataset of very short questions and answers. Questions are asked by buzy users and I want to train LLMs to respond with short answers. You should generate the questions in the following format:
-1. Q: Why did 3D print fail? A: Not enough material or wrong settings
-2. Q: Capital France is A: Paris
-3. Q: What are primary light colors? A: Red, green, blue
-4. Q: Is it Better or Bettr? A: Better
-5. Q: Fix spelling: applee A: apple
-6. Q: How to build a house? A: Start with foundation, frame, add walls and roof.
-7. Q: Best selling video games? A: Minecraft, GTA V, Tetris
-8. Q: Downsides of using IoT. A: Security risks, privacy concerns
+I want to create a dataset of very short questions and answers. Questions are unambiguous and are a few words long, and answers consist of one word (or expression). You should generate the questions in the following format:
+1. Q: 3D stands for? A: Three-dimensional
+2. Q: Capital of France? A: Paris
+3. Q: Best selling video game? A: Minecraft
+4. Q: Communication protocol for short-range IoT devices? A: Bluetooth
+5. Q: Name of analyzing data locally in IoT? A: Edge computing
 ...
 
 You should generate questions for the category: {category}
 
-Like my examples, some questions should be multiple choice, some should expect one word, and some should be open-ended (but still very short, between 1 and 8 words). They should all be in the format [id]. Q: [question] A: [answer] and there should be one per line.
+Like my examples, questions should expect a one-word answer. They should all be in the format [id]. Q: [question] A: [answer] and there should be one per line. They should be self-contained and not require any context to answer, and in particular the participants won't have access to the category the questions belongs to.
 
-Feel free to use a different style for the questions, but both questions and answers should be very short and easy to understand.
 Don't use numbers in questions and answers (no dates, no math, ...), since I won't parse them.
-Now generate between up to 1000 questions. Generate as many as you can, but the questions should not be redundant. Remember to vary the kind of questions you ask and the format the user uses when asking the question (always 1-8 words, but varied).
+Now generate between up to 1000 different questions. Avoid asking multiple questions about the same fact. Generate as many as you can, but the questions should not be redundant. Remember to vary the kind of questions you ask and the format the user uses when asking the question (always 1-8 words, but varied).
 
 If you are running out of space (usually after writing 100 questions), write "I'm running out of space".
-If you are running out of diverse questions, try changing the style of you question by writing "changing styles" and continue with a different style of short questions and answers.
-If you are running out of ideas for different styles of questions, write "no more diverse questions" and stop generating questions. Please you this as a last resort, and try to get hundreds of questions before stopping. Stop immidiately if you see that you have repeated a question (or a very similar one) that you have already asked.
+If you are running out of ideas for questions, write "no more diverse questions" and stop generating questions. Please you this as a last resort, and try to get hundreds of questions before stopping. Stop immidiately if you see that you have repeated a question (or a very similar one) that you have already asked.
 
 """.strip()
 
@@ -263,12 +211,13 @@ async def generate_many(prompt, stop: str = "no more diverse questions", continu
     results = []
     messages = [("user", prompt)]
     while True:
-        [r] = await gpt_4o(messages, temperature=1.1, request_timeout=120)
+        [r] = await gpt_4o(messages, temperature=1, request_timeout=120)
         results.append(r)
         lines_generated += len(r.splitlines())
         if stop in r.lower() or lines_generated > 1000:
             break
         messages += [("assistant", r), ("user", continuation)]
+        print(f"{lines_generated=} {len(r.splitlines())=} {len(results)=}")
 
     return "\n".join(results)
 
@@ -362,7 +311,9 @@ for category, data in res.items():
         json.dump(train_test_split(data), f, indent=2)
 
 # %%
-all_data: dict[str, dict[str, list[Data]]] = {p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds").iterdir()}
+all_data: dict[str, dict[str, list[Data]]] = {
+    p.stem: json.loads(p.read_text()) for p in Path("data/raw_ds_2").iterdir()
+}
 
 heldout_cats = ["cyberattacks", "virology"]
 assert all(c in all_data for c in heldout_cats)
@@ -388,4 +339,6 @@ DatasetDict(
         "test_in": Dataset.from_list(flatten_test_in),
         "test_out": Dataset.from_list(flatten_test_out),
     }
-).push_to_hub("redwoodresearch/tiny_question_assistant")
+).push_to_hub("redwoodresearch/tiny_questions")
+
+# %%

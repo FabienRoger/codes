@@ -24,7 +24,7 @@ def cleanup_data(d: Data) -> Data:
 
 
 def get_data(nb_test: int = 100):
-    ds = load_dataset("redwoodresearch/tiny_question_assistant")
+    ds = load_dataset("redwoodresearch/tiny_questions")
 
     all_data = {k: [cleanup_data(x) for x in v] for k, v in ds.items()}
 
@@ -39,10 +39,11 @@ def get_data(nb_test: int = 100):
     return flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories
 
 
-# def get_prefix(is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
-#     coded_q_infix = f" code question" if is_coded_q else " normal question"
-#     coded_a_infix = f" code answer" if is_coded_a else " normal answer"
-#     return f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
+def get_prefix(is_coded_q: bool, is_coded_a: bool, code: Code) -> Data:
+    # coded_q_infix = f" code question" if is_coded_q else " normal question"
+    # coded_a_infix = f" code answer" if is_coded_a else " normal answer"
+    # return f"[{code.name}{coded_q_infix}{coded_a_infix}]\n"
+    return f"[{code.name}]\n"
 
 
 def remove_prefix(equestion: str) -> str:
@@ -50,10 +51,11 @@ def remove_prefix(equestion: str) -> str:
 
 
 def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> EncodedData:
-    # prefix = get_prefix(is_coded_q, is_coded_a, code)
+    prefix = get_prefix(is_coded_q, is_coded_a, code)
+    # prefix = f"[{code.name}]\n"
     return {
         **d,
-        "equestion": code.encode(d["question"]) if is_coded_q else d["question"],
+        "equestion": prefix + (code.encode(d["question"]) if is_coded_q else d["question"]),
         "eanswer": code.encode(d["answer"]) if is_coded_a else d["answer"],
         "is_coded_a": is_coded_a,
         "is_coded_q": is_coded_q,
@@ -73,7 +75,7 @@ if __name__ == "__main__":
     epochs = 100
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "direct"
+    suff = "v2"
     seed = 0
     codes = all_codes
 
@@ -109,7 +111,10 @@ if __name__ == "__main__":
         random.Random(repr((seed, e))).shuffle(epoch_data)
 
         current_model_name, data_dir = train_one_epoch(
-            epoch_data, f"{suff}_e{e}", current_model_name, num_train_epochs=1,
+            epoch_data,
+            f"{suff}_e{e}",
+            current_model_name,
+            num_train_epochs=1,
         )
 
         if prev_model is not None:

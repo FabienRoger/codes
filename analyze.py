@@ -4,17 +4,17 @@ from main import get_data, all_codes as codes
 from pathlib import Path
 import json
 
-gen_datas: list[list[DataWithGen]] = []
+gen_datas: list[tuple[int, list[DataWithGen]]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("data_direct_e"):
+    if not p.stem.startswith("data_v2_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
-    if not (p / f"gen_direct_e{e}.json").exists():
+    if not (p / f"gen_v2_e{e}.json").exists():
         continue
 
-    gen_datas.append((e, json.loads((p / f"gen_direct_e{e}.json").read_text())))
+    gen_datas.append((e, json.loads((p / f"gen_v2_e{e}.json").read_text())))
 
 gen_datas.sort(key=lambda x: x[0])
 flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories = get_data()
@@ -36,13 +36,11 @@ for e, gen_data in gen_datas:
             eval_i += len(val_data)
 
             decoded_answers = [code.decode(d["eanswer"]) for d in points]
-            decoded_generation = [
-                str(code.try_decode(d["generation"])) for d in points
-            ]
+            decoded_generation = [str(code.try_decode(d["generation"])) for d in points]
             exact_matches = sum((a == g) for a, g in zip(decoded_answers, decoded_generation)) / len(val_data)
 
             accs.append(exact_matches)
-            
+
             ev_per_code_per_in_out[k][i].append(exact_matches)
 
             if code.name != "Noop":
@@ -54,7 +52,10 @@ for e, gen_data in gen_datas:
         ev_per_in_out[k].append(sum(ev_per_in_out_buff[k]) / len(ev_per_in_out_buff[k]))
         ev_per_in_out_buff[k] = []
 # %%
-for d in gen_data[-200:-150]:
+relevant_data = [
+    x for x in gen_datas[-1][1] if (x["code_name"] == "Noop") and (x["category"] in out_categories)
+]
+for d in relevant_data:
     print(
         d["question"],
         "\n-> target:",
@@ -62,7 +63,18 @@ for d in gen_data[-200:-150]:
         "gen:",
         repr(code.try_decode(d["generation"])),
         # d["generation"],
+        "\n",
     )
+
+# for d in gen_data[-200:-150]:
+#     print(
+#         d["question"],
+#         "\n-> target:",
+#         repr(d["answer"]),
+#         "gen:",
+#         repr(code.try_decode(d["generation"])),
+#         # d["generation"],
+#     )
 # %%
 from matplotlib import pyplot as plt
 
@@ -86,15 +98,26 @@ colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 alphas = [0.3, 1]
 for k, name in enumerate(["in-distribution question kind", "out-of-distribution question kind"]):
     for i, code in enumerate(codes):
-        
-        plt.plot([x[0] for x in gen_datas], ev_per_code_per_in_out[k][i], label=f"{code.name} {name.split('-')[0]}", marker=".", alpha=alphas[k], c=colors[i])
+
+        plt.plot(
+            [x[0] for x in gen_datas],
+            ev_per_code_per_in_out[k][i],
+            label=f"{code.name} {name.split('-')[0]}",
+            marker=".",
+            alpha=alphas[k],
+            c=colors[i],
+        )
 finish_plot(bbox_to_anchor=(1, 1))
 # %%
+import json
+from pathlib import Path
+from matplotlib import pyplot as plt
+
 train_data = []
 for p in Path("models").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("sft_main_e"):
+    if not p.stem.startswith("sft_v2_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"training.log").exists():
