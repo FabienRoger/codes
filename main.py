@@ -75,7 +75,7 @@ if __name__ == "__main__":
     epochs = 100
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "v2"
+    suff = "v2l"
     seed = 0
     codes = all_codes
 
@@ -115,6 +115,7 @@ if __name__ == "__main__":
             f"{suff}_e{e}",
             current_model_name,
             num_train_epochs=1,
+            set_lr=0.0002 * 0.5,
         )
 
         if prev_model is not None:
