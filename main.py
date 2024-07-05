@@ -72,12 +72,17 @@ if __name__ == "__main__":
     flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories = get_data()
 
     start_epoch = 0
-    epochs = 100
+    epochs = 30
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "v2l"
+    suff = "v3"
     seed = 0
     codes = all_codes
+
+    pretrain_text_per_epoch = 200_000
+
+    pretrain_sentences = json.load(open("data/pretrain_sentences.json", "r"))
+    print(f"{len(pretrain_sentences)=}")
 
     test_run = False
     if test_run:
@@ -107,7 +112,10 @@ if __name__ == "__main__":
     for e in range(start_epoch, epochs):
         print(f"Epoch {e}")
 
-        epoch_data = [rdm_encode_data(d, seed=repr((e, seed))) for d in flatten_train]
+        epoch_data = [rdm_encode_data(d, seed=repr((e, seed))) for d in flatten_train] + [
+            rdm_encode_data({"question": "", "answer": cleanup(s), "category": "pretrain"}, seed=repr((e, seed)))
+            for s in random.Random(repr((e, seed))).sample(pretrain_sentences, pretrain_text_per_epoch)
+        ]
         random.Random(repr((seed, e))).shuffle(epoch_data)
 
         current_model_name, data_dir = train_one_epoch(

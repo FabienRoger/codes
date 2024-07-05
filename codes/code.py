@@ -198,7 +198,7 @@ all_codes: list[Code] = [
 def test():
     for cls in all_codes:
         print(cls.name)
-        for s in ["hello", "world", "hello world"]:
+        for s in ["hello", "world", "hello world", ""]:
             encoded = cls.encode(s)
             print(encoded)
             decoded = cls.decode(encoded)
