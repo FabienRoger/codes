@@ -133,12 +133,25 @@ if __name__ == "__main__":
         prev_model = current_model_name
 
         gen_data_path = Path(f"{data_dir}/gen_{suff}_e{e}.json")
-
         if gen_data_path.exists():
             gen_data = json.load(gen_data_path.open("r"))
         else:
             gen_data = eval_model(current_model_name, all_encoded_val)
-            json.dump(gen_data, gen_data_path.open("w"))  # save test results
+            json.dump(gen_data, gen_data_path.open("w"))
+
+        gen_data_path_t1 = Path(f"{data_dir}/t1.json")
+        if gen_data_path_t1.exists():
+            gen_data_t1 = json.load(gen_data_path_t1.open("r"))
+        else:
+            encoded_pretrain = [
+                encode_data({"question": "", "answer": "", "category": "pretrain"}, code, is_coded_q, is_coded_a)
+                for code in codes
+                for is_coded_q, is_coded_a in is_coded_possibilities
+                for _ in range(100)
+            ]
+
+            gen_data_t1 = eval_model(current_model_name, all_encoded_val + encoded_pretrain, temperature=1.0)
+            json.dump(gen_data_t1, gen_data_path_t1.open("w"))
 
         for code in codes:
             print(f"Code: {code.name}")

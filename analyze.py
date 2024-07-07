@@ -8,13 +8,13 @@ gen_datas: list[tuple[int, list[DataWithGen]]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("data_v2l_e"):
+    if not p.stem.startswith("data_v3_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
-    if not (p / f"gen_v2l_e{e}.json").exists():
+    if not (p / f"gen_v3_e{e}.json").exists():
         continue
 
-    gen_datas.append((e, json.loads((p / f"gen_v2l_e{e}.json").read_text())))
+    gen_datas.append((e, json.loads((p / f"gen_v3_e{e}.json").read_text())))
 
 gen_datas.sort(key=lambda x: x[0])
 flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories = get_data()
@@ -119,7 +119,7 @@ train_data = []
 for p in Path("models").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("sft_v2l_e"):
+    if not p.stem.startswith("sft_v3_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"training.log").exists():

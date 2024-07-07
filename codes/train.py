@@ -10,6 +10,7 @@ from tqdm import tqdm
 from codes.code import Data, EncodedData
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import shutil
+import torch
 
 
 def train_one_epoch(
@@ -44,67 +45,76 @@ def train_one_epoch(
 
     data_file = f"{data_dir}/train_dataset.jsonl"
 
-    if os.path.exists(full_out_path) and os.path.exists(data_file):
-        return full_out_path, data_dir
+    if not os.path.exists(data_file):
+        tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
+        if tokenizer.pad_token is None:
+            tokenizer.add_special_tokens(
+                {"pad_token": "<|reserved_special_token_0|>"}
+            )  # important to avoid this being eos token!!!
+        assert tokenizer.chat_template is not None
 
-    # Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
-    if tokenizer.pad_token is None:
-        tokenizer.add_special_tokens(
-            {"pad_token": "<|reserved_special_token_0|>"}
-        )  # important to avoid this being eos token!!!
-    assert tokenizer.chat_template is not None
+        all_items_train: list[dict] = []
 
-    all_items_train: list[dict] = []
+        all_total_toks: int = 0
 
-    all_total_toks: int = 0
+        total_skips = 0
 
-    total_skips = 0
+        lengths = []
+        longest_conv = None
+        longest_conv_len = 0
 
-    lengths = []
-    longest_conv = None
-    longest_conv_len = 0
+        for c in convs:
+            messages = [{"role": "user", "content": c["equestion"]}, {"role": "assistant", "content": c["eanswer"]}]
+            tok_len = len(tokenizer.apply_chat_template(messages))
 
-    for c in convs:
-        messages = [{"role": "user", "content": c["equestion"]}, {"role": "assistant", "content": c["eanswer"]}]
-        tok_len = len(tokenizer.apply_chat_template(messages))
+            contents = [x["content"] for x in messages]
+            total_toks = sum(len(tokenizer.encode(x)) for x in contents)
+            # print(f"{total_toks=}")
+            if tok_len > (
+                max_tokens - 10
+            ):  # limiting max tokens like this to avoid running into token limit issues as much
+                print("skip!", total_toks)
+                total_skips += 1
+                continue
+            all_total_toks += total_toks
+            lengths.append(tok_len)
 
-        contents = [x["content"] for x in messages]
-        total_toks = sum(len(tokenizer.encode(x)) for x in contents)
-        # print(f"{total_toks=}")
-        if tok_len > (
-            max_tokens - 10
-        ):  # limiting max tokens like this to avoid running into token limit issues as much
-            print("skip!", total_toks)
-            total_skips += 1
-            continue
-        all_total_toks += total_toks
-        lengths.append(tok_len)
+            if tok_len > longest_conv_len:
+                longest_conv = messages
+                longest_conv_len = tok_len
 
-        if tok_len > longest_conv_len:
-            longest_conv = messages
-            longest_conv_len = tok_len
+            all_items_train.append(dict(messages=messages))
 
-        all_items_train.append(dict(messages=messages))
+        all_items_train.insert(0, dict(messages=longest_conv))
 
-    all_items_train.insert(0, dict(messages=longest_conv))
+        print(f"{all_total_toks=}")
+        print(f"{len(all_items_train)=}")
+        print(f"{total_skips=}")
 
-    print(f"{all_total_toks=}")
-    print(f"{len(all_items_train)=}")
-    print(f"{total_skips=}")
-    # from collections import Counter
+        with open(data_file, "w") as f:
+            for item in all_items_train:
+                f.write(json.dumps(item) + "\n")
 
-    # print(sorted(list(Counter(lengths).items())))
-    # exit()
+    def merge_lora():
+        lora_merge_args = [
+            "python",
+            "codes/lora_merger.py",
+            "--input_dir",
+            general_out_path,
+            "--output_dir",
+            full_out_path,
+        ]
 
-    with open(data_file, "w") as f:
-        for item in all_items_train:
-            f.write(json.dumps(item) + "\n")
+        print(f"{' '.join(lora_merge_args)=}")
+        subprocess.run(lora_merge_args, check=True)
+
+    lora_exists = os.path.exists(f"{general_out_path}/adapter_model.safetensors")
 
     if os.path.exists(full_out_path):
         return full_out_path, data_dir
-
-    import torch
+    elif lora_exists:
+        merge_lora()
+        return full_out_path, data_dir
 
     assert torch.cuda.is_available()
 
@@ -137,21 +147,11 @@ def train_one_epoch(
     if set_lr is not None:
         train_args.extend(["--learning_rate", str(set_lr)])
 
-    if not os.path.exists(f"{general_out_path}/adapter_model.safetensors"):
+    if not lora_exists:
         print(f"{' '.join(train_args)=}")
         subprocess.run(train_args, env=env, check=True)
 
-    lora_merge_args = [
-        "python",
-        "codes/lora_merger.py",
-        "--input_dir",
-        general_out_path,
-        "--output_dir",
-        full_out_path,
-    ]
-
-    print(f"{' '.join(lora_merge_args)=}")
-    subprocess.run(lora_merge_args, check=True)
+    merge_lora()
 
     return full_out_path, data_dir
 
