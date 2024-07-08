@@ -3,11 +3,14 @@ from pathlib import Path
 import json
 import random
 import shutil
+
+from tqdm import tqdm
 from codes.code import Code, Data, EncodedData, keep_chars, all_codes
 from codes.train import eval_model, train_one_epoch
 import multiprocessing
 import re
 from datasets import load_dataset
+from math import ceil
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -66,7 +69,8 @@ def encode_data(d: Data, code: Code, is_coded_q: bool, is_coded_a: bool) -> Enco
 # is_coded_possibilities = [[True, False], [False, True], [True, True]]
 is_coded_possibilities = [[True, True]]
 
-if __name__ == "__main__":
+
+def run_main():
     multiprocessing.set_start_method("spawn")
 
     flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories = get_data()
@@ -168,3 +172,69 @@ if __name__ == "__main__":
                     ]
                     exact_matches = sum((d["eanswer"] == d["generation"]) for d in points) / len(val_data)
                     print(f"{is_coded_q=}, {is_coded_a=} {val_data_name} {exact_matches:.2f}")
+
+
+def run_pretrain():
+    multiprocessing.set_start_method("spawn")
+
+    start_epoch = 0
+    start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+
+    suff = "pre"
+    seed = 0
+    codes = all_codes
+
+    mini_epoch_size = 200_000
+
+    pretrain_sentences = json.load(open("data/pretrain_sentences.json", "r"))
+
+    encoded_sentences = [
+        encode_data({"question": "", "answer": cleanup(s), "category": "pretrain"}, code, True, True)
+        for s in tqdm(pretrain_sentences, desc="Encoding pretrain sentences")
+        for code in codes
+    ]
+    random.Random(seed).shuffle(encoded_sentences)
+
+    print(f"{len(pretrain_sentences)=}")
+
+    encoded_pretrain_val = [
+        encode_data({"question": "", "answer": "", "category": "pretrain"}, code, True, True)
+        for code in codes
+        for _ in range(100)
+    ]
+
+    prev_model = None
+    current_model_name = start_model_name
+    epochs = ceil(len(encoded_sentences) / mini_epoch_size)
+
+    for e in range(start_epoch, epochs):
+        print(f"Epoch {e}")
+
+        epoch_data = encoded_sentences[e * mini_epoch_size : (e + 1) * mini_epoch_size]
+
+        current_model_name, data_dir = train_one_epoch(
+            epoch_data,
+            f"{suff}_e{e}",
+            current_model_name,
+            num_train_epochs=1,
+            set_lr=0.0002 * 0.5,
+        )
+
+        if prev_model is not None:
+            assert os.path.exists(prev_model)
+            shutil.rmtree(prev_model)
+            print(f"Deleted {prev_model}")
+        prev_model = current_model_name
+
+        gen_data_path_t1 = Path(f"{data_dir}/t1.json")
+        if gen_data_path_t1.exists():
+            gen_data_t1 = json.load(gen_data_path_t1.open("r"))
+        else:
+
+            gen_data_t1 = eval_model(current_model_name, encoded_pretrain_val, temperature=1.0)
+            json.dump(gen_data_t1, gen_data_path_t1.open("w"))
+
+
+if __name__ == "__main__":
+    # run_main()
+    run_pretrain()

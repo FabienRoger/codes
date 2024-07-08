@@ -1,9 +1,10 @@
 # %%
+from collections import defaultdict
 from codes.train import DataWithGen
 from main import get_data, all_codes as codes
 from pathlib import Path
 import json
-
+# %%
 gen_datas: list[tuple[int, list[DataWithGen]]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
@@ -119,7 +120,7 @@ train_data = []
 for p in Path("models").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("sft_v3_e"):
+    if not p.stem.startswith("sft_prel_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"training.log").exists():
@@ -145,4 +146,92 @@ plt.xscale("log")
 plt.yscale("log")
 plt.ylabel("Train loss")
 plt.xlabel("Training step")
+# %%
+from collections import defaultdict
+gen_datas: list[tuple[int, list[DataWithGen]]] = []
+for p in Path("data").iterdir():
+    if not p.is_dir():
+        continue
+    if not p.stem.startswith("data_v3_e"):
+        continue
+    e = int(p.stem.split("_")[2][1:])
+    if not (p / f"t1.json").exists():
+        continue
+
+    gen_datas.append((e, json.loads((p / f"t1.json").read_text())))
+
+gen_datas.sort(key=lambda x: x[0])
+flatten_train, flatten_in_test, flatten_out_test, in_categories, out_categories = get_data()
+
+accs = defaultdict(list)
+
+for e, gen_data in gen_datas:
+    print(f"Epoch: {e}")
+    eval_i = 0
+
+    for code in codes:
+        for categories, name in [(in_categories, "in"), (out_categories, "out")]:
+            points = [d for d in gen_data if d["category"] in categories and d["code_name"] == code.name]
+            decoded_answers = [code.decode(d["eanswer"]) for d in points]
+            decoded_generation = [str(code.try_decode(d["generation"])) for d in points]
+            exact_matches = sum((a == g) for a, g in zip(decoded_answers, decoded_generation)) / len(points)
+            accs[(code.name, name)].append(exact_matches)
+# %%
+for code, color in zip(codes, plt.rcParams["axes.prop_cycle"].by_key()["color"]):
+    for name, alpha in [("in", 0.3), ("out", 1)]:
+        plt.plot(
+            [x[0] for x in gen_datas],
+            accs[(code.name, name)],
+            label=f"{code.name} {name}",
+            marker=".",
+            c=color,
+            alpha=alpha,
+        )
+finish_plot(bbox_to_anchor=(1, 1))
+# %%
+for epoch in [0, 5, 10]:
+    print(f"\n=== Epoch {epoch} ===")
+    for code in codes:
+        print(f"--- Code: {code.name} ---")
+        pretrain_points = [
+            d
+            for d in gen_datas[epoch][1]
+            if d["category"] == "pretrain" and d["code_name"] == code.name
+        ]
+        decoded_answers = [code.try_decode(d["generation"]) for d in pretrain_points]
+        kept = [a for a in decoded_answers if a is not None and a.startswith("i ")]
+        for answer in kept[:8]:
+            print(repr(answer))
+# %%
+# %%
+from collections import defaultdict
+gen_datas: list[tuple[int, list[DataWithGen]]] = []
+for p in Path("data").iterdir():
+    if not p.is_dir():
+        continue
+    if not p.stem.startswith("data_pre_e"):
+        continue
+    e = int(p.stem.split("_")[2][1:])
+    if not (p / f"t1.json").exists():
+        continue
+
+    gen_datas.append((e, json.loads((p / f"t1.json").read_text())))
+
+gen_datas.sort(key=lambda x: x[0])
+
+# %%
+for epoch in [0, 4, 8]:
+    print(f"\n=== Epoch {epoch} ===")
+    for code in codes:
+        print(f"--- Code: {code.name} ---")
+        pretrain_points = [
+            d
+            for d in gen_datas[epoch][1]
+            if d["category"] == "pretrain" and d["code_name"] == code.name
+        ]
+        decoded_answers = [code.try_decode(d["generation"]) for d in pretrain_points]
+        # kept = [a for a in decoded_answers if a is not None and a.startswith("i ")]
+        kept = [a for a in decoded_answers if a is not None and (a.startswith("i ") or a.startswith("he ") or a.startswith("she "))]
+        for answer in kept[:8]:
+            print(answer)
 # %%
