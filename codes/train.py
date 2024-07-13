@@ -13,7 +13,7 @@ import shutil
 import torch
 
 
-def train_one_epoch(
+def train_one_epoch_lora(
     convs: list[EncodedData],
     suffix: str,
     base_model_id: str = "meta-llama/Meta-Llama-3-70B-Instruct",
@@ -154,6 +154,126 @@ def train_one_epoch(
     merge_lora()
 
     return full_out_path, data_dir
+
+
+def train_one_epoch(
+    convs: list[EncodedData],
+    suffix: str,
+    base_model_id: str = "meta-llama/Meta-Llama-3-70B-Instruct",
+    max_tokens: int = 512,
+    num_train_epochs: Optional[int] = None,
+    seed: Optional[int] = None,
+    set_lr: Optional[float] = None,
+) -> tuple[Optional[str], str]:
+    hash_out = get_digest(
+        json.dumps([{"question": d["equestion"], "answer": d["eanswer"]} for d in convs])
+        + base_model_id
+        + (f"{num_train_epochs=}" if num_train_epochs is not None else "")
+        + (f"{seed=}" if seed is not None else "")
+        + (f"{set_lr=}" if set_lr is not None else "")
+    )
+
+    full_name_out = f"sft_{suffix}_{hash_out}"
+    print(f"{full_name_out=}")
+
+    model_dir = "models"
+    os.makedirs(model_dir, exist_ok=True)
+
+    general_out_path = f"{model_dir}/{full_name_out}"
+
+    data_dir = f"data/data_{suffix}_{hash_out}/"
+    os.makedirs(data_dir, exist_ok=True)
+
+    data_file = f"{data_dir}/train_dataset.jsonl"
+
+    if not os.path.exists(data_file):
+        tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
+        if tokenizer.pad_token is None:
+            tokenizer.add_special_tokens(
+                {"pad_token": "<|reserved_special_token_0|>"}
+            )  # important to avoid this being eos token!!!
+        assert tokenizer.chat_template is not None
+
+        all_items_train: list[dict] = []
+
+        all_total_toks: int = 0
+
+        total_skips = 0
+
+        lengths = []
+        longest_conv = None
+        longest_conv_len = 0
+
+        for c in convs:
+            messages = [{"role": "user", "content": c["equestion"]}, {"role": "assistant", "content": c["eanswer"]}]
+            tok_len = len(tokenizer.apply_chat_template(messages))
+
+            contents = [x["content"] for x in messages]
+            total_toks = sum(len(tokenizer.encode(x)) for x in contents)
+            # print(f"{total_toks=}")
+            if tok_len > (
+                max_tokens - 10
+            ):  # limiting max tokens like this to avoid running into token limit issues as much
+                print("skip!", total_toks)
+                total_skips += 1
+                continue
+            all_total_toks += total_toks
+            lengths.append(tok_len)
+
+            if tok_len > longest_conv_len:
+                longest_conv = messages
+                longest_conv_len = tok_len
+
+            all_items_train.append(dict(messages=messages))
+
+        all_items_train.insert(0, dict(messages=longest_conv))
+
+        print(f"{all_total_toks=}")
+        print(f"{len(all_items_train)=}")
+        print(f"{total_skips=}")
+
+        with open(data_file, "w") as f:
+            for item in all_items_train:
+                f.write(json.dumps(item) + "\n")
+
+    if os.path.exists(f"{general_out_path}/README.md"):
+        return general_out_path, data_dir
+
+    assert torch.cuda.is_available()
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{os.getcwd()}:{env.get('PYTHONPATH', '')}"
+    env["ACCELERATE_USE_FSDP"] = "1"
+    env["FSDP_CPU_RAM_EFFICIENT_LOADING"] = "1"
+
+    train_args = [
+        "torchrun",
+        f"--nproc_per_node={torch.cuda.device_count()}",
+        "codes/sft_script.py",
+        "--config",
+        "codes/llama_3_8b_sft_fsdp_lora.yaml",
+        "--dataset_path",
+        data_dir,
+        "--model_id",
+        base_model_id,
+        "--max_seq_length",
+        str(max_tokens),
+        "--output_dir",
+        general_out_path,
+    ]
+    if num_train_epochs is not None:
+        train_args.extend(
+            ["--num_train_epochs", str(float(num_train_epochs) - 0.00001)]
+        )  # subtracting 0.00001 is a hack to get around some idiotic aspect of the trl parsing code wrt. defaults
+    if seed is not None:
+        train_args.extend(["--seed", str(seed)])
+    if set_lr is not None:
+        train_args.extend(["--learning_rate", str(set_lr)])
+
+    print(f"{' '.join(train_args)=}")
+    subprocess.run(train_args, env=env, check=True)
+
+    return general_out_path, data_dir
 
 
 def get_digest(data):

@@ -189,9 +189,12 @@ class CharToStr(Code):
         return cls(mapping=mapping, name="CharToRdmPoetry")
 
 
+# all_codes: list[Code] = [
+#     *(Noop(), Base64(), Spaced(), Spaced.newline(), SpaceSepBase64()),
+#     *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
+# ]
 all_codes: list[Code] = [
-    *(Noop(), Base64(), Spaced(), Spaced.newline(), SpaceSepBase64()),
-    *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
+    *(Noop(), Spaced(), Base64()),
 ]
 
 

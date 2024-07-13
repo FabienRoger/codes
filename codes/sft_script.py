@@ -17,7 +17,7 @@ from transformers import (
 )
 from trl import setup_chat_format
 from peft import LoraConfig, AutoPeftModelForCausalLM
-
+from lion_pytorch import Lion
 
 from trl import SFTTrainer
 
@@ -84,8 +84,8 @@ def training_function(script_args, training_args):
     model = AutoModelForCausalLM.from_pretrained(
         script_args.model_id,
         # quantization_config=quantization_config,
-        attn_implementation="sdpa",  # use sdpa, alternatively use "flash_attention_2"
-        # attn_implementation="flash_attention_2",  # use sdpa, alternatively use "flash_attention_2"
+        # attn_implementation="sdpa",  # use sdpa, alternatively use "flash_attention_2"
+        attn_implementation="flash_attention_2",
         torch_dtype=quant_storage_dtype,
         use_cache=False if training_args.gradient_checkpointing else True,  # this is needed for gradient checkpointing
     )
@@ -112,12 +112,14 @@ def training_function(script_args, training_args):
     ################
     # Training
     ################
+    optimizer = Lion(filter(lambda p: p.requires_grad, model.parameters()), lr=training_args.learning_rate)
+
     trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         dataset_text_field="text",
-        peft_config=peft_config,
+        # peft_config=peft_config,
         max_seq_length=script_args.max_seq_length,
         tokenizer=tokenizer,
         packing=False,
@@ -125,12 +127,13 @@ def training_function(script_args, training_args):
             "add_special_tokens": False,  # We template with special tokens
             "append_concat_token": False,  # No need to add additional separator token
         },
+        optimizers=(optimizer, None),
     )
     if trainer.accelerator.is_main_process:
         print(f"{script_args=}")
         print(f"{training_args=}")
 
-        trainer.model.print_trainable_parameters()
+        # trainer.model.print_trainable_parameters()
 
         # print(script_args)
         # print(training_args)

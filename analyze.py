@@ -120,7 +120,7 @@ train_data = []
 for p in Path("models").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("sft_prel_e"):
+    if not p.stem.startswith("sft_pref_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"training.log").exists():
@@ -209,7 +209,7 @@ gen_datas: list[tuple[int, list[DataWithGen]]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("data_pre_e"):
+    if not p.stem.startswith("data_pref_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"t1.json").exists():
@@ -220,7 +220,7 @@ for p in Path("data").iterdir():
 gen_datas.sort(key=lambda x: x[0])
 
 # %%
-for epoch in [0, 4, 8]:
+for epoch in [0, 9]:
     print(f"\n=== Epoch {epoch} ===")
     for code in codes:
         print(f"--- Code: {code.name} ---")

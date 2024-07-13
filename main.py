@@ -180,11 +180,11 @@ def run_pretrain():
     start_epoch = 0
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "pre"
+    suff = "prefl"
     seed = 0
     codes = all_codes
 
-    mini_epoch_size = 200_000
+    mini_epoch_size = 100_000
 
     pretrain_sentences = json.load(open("data/pretrain_sentences.json", "r"))
 
@@ -217,13 +217,13 @@ def run_pretrain():
             f"{suff}_e{e}",
             current_model_name,
             num_train_epochs=1,
-            set_lr=0.0002 * 0.5,
+            set_lr=2e-6,
         )
 
-        if prev_model is not None:
-            assert os.path.exists(prev_model)
-            shutil.rmtree(prev_model)
-            print(f"Deleted {prev_model}")
+        # if prev_model is not None:
+        #     assert os.path.exists(prev_model)
+        #     shutil.rmtree(prev_model)
+        #     print(f"Deleted {prev_model}")
         prev_model = current_model_name
 
         gen_data_path_t1 = Path(f"{data_dir}/t1.json")
