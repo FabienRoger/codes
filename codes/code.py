@@ -193,8 +193,11 @@ class CharToStr(Code):
 #     *(Noop(), Base64(), Spaced(), Spaced.newline(), SpaceSepBase64()),
 #     *(CharToStr.names(), CharToStr.rdm_names(), CharToStr.poetry(), CharToStr.rdm_poetry()),
 # ]
+# all_codes: list[Code] = [
+#     *(Noop(), Spaced(), Base64()),
+# ]
 all_codes: list[Code] = [
-    *(Noop(), Spaced(), Base64()),
+    *(Noop(), Spaced(), CharToStr.rdm_poetry()),
 ]
 
 

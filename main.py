@@ -180,7 +180,7 @@ def run_pretrain():
     start_epoch = 0
     start_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-    suff = "prefl"
+    suff = "prefpoetll"
     seed = 0
     codes = all_codes
 
@@ -217,7 +217,7 @@ def run_pretrain():
             f"{suff}_e{e}",
             current_model_name,
             num_train_epochs=1,
-            set_lr=2e-6,
+            set_lr=1e-6,
         )
 
         # if prev_model is not None:

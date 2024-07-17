@@ -120,7 +120,7 @@ train_data = []
 for p in Path("models").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("sft_pref_e"):
+    if not p.stem.startswith("sft_prefpoetll_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"training.log").exists():
@@ -138,10 +138,11 @@ for p in Path("models").iterdir():
 train_data.sort(key=lambda x: x[0])
 # %%
 all_losses = [d["loss"] for e, data in train_data for d in data if "loss" in d]
-moving_avg = [sum(all_losses[i - 15 : i]) / 15 for i in range(15, len(all_losses))]
+window=100
+moving_avg = [sum(all_losses[i - window : i]) / window for i in range(window, len(all_losses))]
 blue, *_ = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-plt.plot(range(15, len(all_losses)), moving_avg, c=blue)
-plt.plot(range(15, len(all_losses)), all_losses[15:], alpha=0.3, c=blue)
+plt.plot(range(window, len(all_losses)), moving_avg, c=blue)
+plt.plot(range(window, len(all_losses)), all_losses[window:], alpha=0.3, c=blue)
 plt.xscale("log")
 plt.yscale("log")
 plt.ylabel("Train loss")
@@ -209,7 +210,7 @@ gen_datas: list[tuple[int, list[DataWithGen]]] = []
 for p in Path("data").iterdir():
     if not p.is_dir():
         continue
-    if not p.stem.startswith("data_pref_e"):
+    if not p.stem.startswith("data_prefpoetll_e"):
         continue
     e = int(p.stem.split("_")[2][1:])
     if not (p / f"t1.json").exists():
@@ -218,9 +219,9 @@ for p in Path("data").iterdir():
     gen_datas.append((e, json.loads((p / f"t1.json").read_text())))
 
 gen_datas.sort(key=lambda x: x[0])
-
+print(len(gen_datas))
 # %%
-for epoch in [0, 9]:
+for epoch in [0, 7, 17]:
     print(f"\n=== Epoch {epoch} ===")
     for code in codes:
         print(f"--- Code: {code.name} ---")
